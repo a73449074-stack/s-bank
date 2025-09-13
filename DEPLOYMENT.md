@@ -33,19 +33,28 @@ Alternatively, use a Vercel Environment Variable `API_BASE_URL` and read it in `
 
 ## 3) Deploy the backend
 You have a Node/Express server in `server/`. Options:
-- Vercel Serverless: extract API routes into `api/` functions (more work).
 - Render / Railway / Fly.io / Heroku: easiest to host the entire Express server.
+- Vercel Serverless: extract API routes into `api/` functions (more work).
 
-Quick steps (Render example):
-- Create a new Web Service from your GitHub repo, root `server/` path.
-- Set build/run:
-  - Build Command: `npm install`
-  - Start Command: `node index.js`
-- Env vars:
-  - `MONGO_URI` = your MongoDB connection string
-  - `DB_NAME` = your db name
-  - `PORT` = 4000
-- After deploy, copy the public URL, e.g. `https://bank-backend.onrender.com`. Update `vercel.json` accordingly.
+### Render (recommended)
+Option A — One-click via `render.yaml` (added in repo):
+1. In Render: New → Blueprint → Connect your GitHub repo.
+2. Render reads `render.yaml` and creates a web service at `server/`.
+3. Set Environment Variables during creation:
+   - `MONGO_URI` = your MongoDB Atlas connection string
+   - `DB_NAME` = `securebank` (or your choice)
+   - `PORT` = `4000`
+4. Deploy and verify `/api/health`.
+
+Option B — Manual Web Service:
+1. New → Web Service → Select repo → Set Root Directory to `server/`.
+2. Build Command: `npm install`
+3. Start Command: `node index.js`
+4. Health Check Path: `/api/health`
+5. Environment Variables:
+   - `MONGO_URI`, `DB_NAME`, `PORT=4000`
+6. Deploy and copy the public URL, e.g. `https://securebank-backend.onrender.com`.
+7. Update `vercel.json` destination to that URL.
 
 ## 4) Test the integration
 - Visit your Vercel frontend URL.

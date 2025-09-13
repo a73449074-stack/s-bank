@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: securebank-backend
+    env: node
+    rootDir: server
+    plan: free
+    buildCommand: npm install
+    startCommand: node index.js
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: MONGO_URI
+        sync: false # set in Render Dashboard
+      - key: DB_NAME
+        value: securebank
+      - key: PORT
+        value: 4000
