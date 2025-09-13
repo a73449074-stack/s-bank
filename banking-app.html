@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Banking App</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-right" style="margin-left:auto;">
+                    <button class="sign-off-btn">Sign off</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Account Info -->
+        <div class="account-section">
+            <div class="account-info">
+                <div class="account-title">Welcome back</div>
+                <div class="balance">$00.0</div>
+                <div class="balance-label">
+                    Available balance
+                    <i class="fas fa-info-circle"></i>
+                </div>
+                <div id="frozen-banner" class="frozen-banner" style="display:none;">
+                    <i class="fas fa-snowflake"></i>
+                    Your account is currently frozen. Transactions are disabled.
+                </div>
+                
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs">
+            <button class="nav-tab" data-tab="overview">Overview</button>
+            <button class="nav-tab active" data-tab="manage">Manage</button>
+            <button class="nav-tab" data-tab="routing">Routing & balance info</button>
+        </div>
+
+        <!-- Content Area -->
+        <div class="content-area">
+            <div class="tab-content" id="overview">
+                <!-- Transactions Section -->
+                <div class="transactions-section">
+                    <div class="transactions-header">
+                        <h3>Transactions</h3>
+                        <div class="transaction-controls">
+                            <button class="search-transactions">
+                                <i class="fas fa-search"></i>
+                                Search
+                            </button>
+                            <button class="filter-transactions">
+                                <i class="fas fa-filter"></i>
+                                Filter
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Transaction List -->
+                    <div class="transaction-list">
+                        <div class="empty-transactions">
+                            <div class="empty-icon">
+                                <i class="fas fa-receipt"></i>
+                            </div>
+                            <h4>No transactions yet</h4>
+                            <p>Your transaction history will appear here once you start making deposits and transfers.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content active" id="manage">
+                <div class="manage-content">
+                    <!-- Account Management Header -->
+                    <div class="manage-header">
+                        <h3>Manage Account</h3>
+                        <p>Control your account settings and preferences</p>
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div class="quick-actions">
+                        <div class="action-card">
+                            <div class="action-icon">
+                                <i class="fas fa-credit-card"></i>
+                            </div>
+                            <div class="action-content">
+                                <h4>Card Controls</h4>
+                                <p>Manage your debit card settings</p>
+                            </div>
+                            <button class="action-btn" data-action="card-controls">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+
+                        <div class="action-card">
+                            <div class="action-icon">
+                                <i class="fas fa-exchange-alt"></i>
+                            </div>
+                            <div class="action-content">
+                                <h4>Transfer Money</h4>
+                                <p>Send money to others or between accounts</p>
+                            </div>
+                            <button class="action-btn" data-action="transfer">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+
+                        <div class="action-card">
+                            <div class="action-icon">
+                                <i class="fas fa-file-alt"></i>
+                            </div>
+                            <div class="action-content">
+                                <h4>Statements</h4>
+                                <p>View and download account statements</p>
+                            </div>
+                            <button class="action-btn" data-action="statements">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+
+                        <div class="action-card">
+                            <div class="action-icon">
+                                <i class="fas fa-bell"></i>
+                            </div>
+                            <div class="action-content">
+                                <h4>Alerts & Notifications</h4>
+                                <p>Set up account alerts and preferences</p>
+                            </div>
+                            <button class="action-btn" data-action="alerts">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Account Settings -->
+                    <div class="settings-section">
+                        <div class="section-title">
+                            <h4>Account Settings</h4>
+                        </div>
+
+                        <div class="settings-list">
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-user"></i>
+                                    </div>
+                                    <div class="setting-content">
+                                        <h5>Personal Information</h5>
+                                        <p>Update your contact details and preferences</p>
+                                    </div>
+                                </div>
+                                <button class="setting-toggle" data-setting="personal-info">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-shield-alt"></i>
+                                    </div>
+                                    <div class="setting-content">
+                                        <h5>Security Settings</h5>
+                                        <p>Manage passwords and security preferences</p>
+                                    </div>
+                                </div>
+                                <button class="setting-toggle" data-setting="security">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-mobile-alt"></i>
+                                    </div>
+                                    <div class="setting-content">
+                                        <h5>Mobile Banking</h5>
+                                        <p>Configure mobile app settings</p>
+                                    </div>
+                                </div>
+                                <div class="setting-switch">
+                                    <input type="checkbox" id="mobile-banking" checked>
+                                    <label for="mobile-banking" class="switch-label"></label>
+                                </div>
+                            </div>
+
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-envelope"></i>
+                                    </div>
+                                    <div class="setting-content">
+                                        <h5>Email Statements</h5>
+                                        <p>Receive monthly statements via email</p>
+                                    </div>
+                                </div>
+                                <div class="setting-switch">
+                                    <input type="checkbox" id="email-statements" checked>
+                                    <label for="email-statements" class="switch-label"></label>
+                                </div>
+                            </div>
+
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-sms"></i>
+                                    </div>
+                                    <div class="setting-content">
+                                        <h5>SMS Alerts</h5>
+                                        <p>Get transaction alerts via text message</p>
+                                    </div>
+                                </div>
+                                <div class="setting-switch">
+                                    <input type="checkbox" id="sms-alerts">
+                                    <label for="sms-alerts" class="switch-label"></label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Beneficiaries -->
+                    <div class="beneficiaries-section">
+                        <div class="section-title">
+                            <h4>Saved Beneficiaries</h4>
+                            <button class="add-beneficiary-btn">
+                                <i class="fas fa-plus"></i>
+                                Add New
+                            </button>
+                        </div>
+
+                        <div class="beneficiaries-list"><!-- Populated dynamically --></div>
+                    </div>
+
+                    <!-- Account Limits -->
+                    <div class="limits-section">
+                        <div class="section-title">
+                            <h4>Account Limits</h4>
+                        </div>
+
+                        <div class="limits-grid">
+                            <div class="limit-card">
+                                <div class="limit-header">
+                                    <h5>Daily ATM Withdrawal</h5>
+                                    <button class="limit-edit" data-limit="atm">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                </div>
+                                <div class="limit-amount">$500.00</div>
+                                <div class="limit-used">
+                                    <div class="limit-bar">
+                                        <div class="limit-progress" style="width: 0%"></div>
+                                    </div>
+                                    <span>$0 used today</span>
+                                </div>
+                            </div>
+
+                            <div class="limit-card">
+                                <div class="limit-header">
+                                    <h5>Daily Transfer Limit</h5>
+                                    <button class="limit-edit" data-limit="transfer">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                </div>
+                                <div class="limit-amount">$2,500.00</div>
+                                <div class="limit-used">
+                                    <div class="limit-bar">
+                                        <div class="limit-progress" style="width: 12%"></div>
+                                    </div>
+                                    <span>$300 used today</span>
+                                </div>
+                            </div>
+
+                            <div class="limit-card">
+                                <div class="limit-header">
+                                    <h5>Monthly Fee Waiver</h5>
+                                    <span class="limit-status active">Active</span>
+                                </div>
+                                <div class="limit-amount">$15.00</div>
+                                <div class="limit-description">
+                                    Minimum balance requirement met
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="routing">
+                <div class="routing-content">
+                    <!-- Account Details Header -->
+                    <div class="routing-header">
+                        <h3>Account & Routing Information</h3>
+                        <p>Your complete account details and banking information</p>
+                    </div>
+
+                    <!-- Account Summary -->
+                    <div class="account-summary-card">
+                        <div class="summary-header">
+                            <div class="account-type">
+                                <i class="fas fa-university"></i>
+                                <span>EVERYDAY CHECKING</span>
+                            </div>
+                            <div class="account-status">
+                                <span class="status-badge active">Active</span>
+                            </div>
+                        </div>
+                        <div class="summary-details">
+                            <div class="detail-row">
+                                <span class="detail-label">Account Number:</span>
+                                <span class="detail-value" data-field="accountNumber">
+                                    ****0000
+                                    <button class="toggle-visibility-btn" data-toggle="account-number" aria-label="Show account number" aria-pressed="false">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="copy-btn" data-copy="account-number">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Routing Number:</span>
+                                <span class="detail-value" data-field="routingNumber">
+                                    000000000
+                                    <button class="copy-btn" data-copy="routing-number">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Account Holder:</span>
+                                <span class="detail-value" data-field="accountHolder">—</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Account Opened:</span>
+                                <span class="detail-value" data-field="accountOpened">—</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Balance Breakdown -->
+                    <div class="balance-breakdown">
+                        <div class="section-title">
+                            <h4>Balance Breakdown</h4>
+                            <span class="last-updated">Last updated: Today, 8:20 AM</span>
+                        </div>
+
+                        <div class="balance-cards">
+                            <div class="balance-card primary">
+                                <div class="balance-header">
+                                    <i class="fas fa-wallet"></i>
+                                    <span>Available Balance</span>
+                                </div>
+                                <div class="balance-amount">$295.90</div>
+                                <div class="balance-note">Ready to spend</div>
+                            </div>
+
+                            <div class="balance-card">
+                                <div class="balance-header">
+                                    <i class="fas fa-clock"></i>
+                                    <span>Pending Transactions</span>
+                                </div>
+                                <div class="balance-amount">-$45.00</div>
+                                <div class="balance-note">2 pending charges</div>
+                            </div>
+
+                            <div class="balance-card">
+                                <div class="balance-header">
+                                    <i class="fas fa-piggy-bank"></i>
+                                    <span>Current Balance</span>
+                                </div>
+                                <div class="balance-amount">$340.90</div>
+                                <div class="balance-note">Including pending</div>
+                            </div>
+
+                            <div class="balance-card">
+                                <div class="balance-header">
+                                    <i class="fas fa-chart-line"></i>
+                                    <span>Average Daily Balance</span>
+                                </div>
+                                <div class="balance-amount">$425.50</div>
+                                <div class="balance-note">Last 30 days</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Account Features -->
+                    <div class="account-features">
+                        <div class="section-title">
+                            <h4>Account Features</h4>
+                        </div>
+
+                        <div class="features-grid">
+                            <div class="feature-item">
+                                <div class="feature-icon">
+                                    <i class="fas fa-shield-alt"></i>
+                                </div>
+                                <div class="feature-content">
+                                    <h5>FDIC Insured</h5>
+                                    <p>Protected up to $250,000</p>
+                                </div>
+                                <div class="feature-status">
+                                    <i class="fas fa-check-circle"></i>
+                                </div>
+                            </div>
+
+                            <div class="feature-item">
+                                <div class="feature-icon">
+                                    <i class="fas fa-credit-card"></i>
+                                </div>
+                                <div class="feature-content">
+                                    <h5>Debit Card</h5>
+                                    <p>Visa debit card included</p>
+                                </div>
+                                <div class="feature-status">
+                                    <i class="fas fa-check-circle"></i>
+                                </div>
+                            </div>
+
+                            <div class="feature-item">
+                                <div class="feature-icon">
+                                    <i class="fas fa-mobile-alt"></i>
+                                </div>
+                                <div class="feature-content">
+                                    <h5>Mobile Banking</h5>
+                                    <p>24/7 account access</p>
+                                </div>
+                                <div class="feature-status">
+                                    <i class="fas fa-check-circle"></i>
+                                </div>
+                            </div>
+
+                            <div class="feature-item">
+                                <div class="feature-icon">
+                                    <i class="fas fa-exchange-alt"></i>
+                                </div>
+                                <div class="feature-content">
+                                    <h5>Free Transfers</h5>
+                                    <p>Between your accounts</p>
+                                </div>
+                                <div class="feature-status">
+                                    <i class="fas fa-check-circle"></i>
+                                </div>
+                            </div>
+
+                            <div class="feature-item">
+                                <div class="feature-icon">
+                                    <i class="fas fa-university"></i>
+                                </div>
+                                <div class="feature-content">
+                                    <h5>ATM Network</h5>
+                                    <p>55,000+ fee-free ATMs</p>
+                                </div>
+                                <div class="feature-status">
+                                    <i class="fas fa-check-circle"></i>
+                                </div>
+                            </div>
+
+                            <div class="feature-item">
+                                <div class="feature-icon">
+                                    <i class="fas fa-bell"></i>
+                                </div>
+                                <div class="feature-content">
+                                    <h5>Account Alerts</h5>
+                                    <p>Email and SMS notifications</p>
+                                </div>
+                                <div class="feature-status">
+                                    <i class="fas fa-check-circle"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Monthly Statement -->
+                    <div class="statement-section">
+                        <div class="section-title">
+                            <h4>Monthly Statements</h4>
+                            <button class="download-all-btn">
+                                <i class="fas fa-download"></i>
+                                Download All
+                            </button>
+                        </div>
+
+                        <div class="statements-list">
+                            <!-- Cleared: statements will be populated only from new user actions -->
+                        </div>
+                    </div>
+
+                    <!-- Contact & Support -->
+                    <div class="contact-section">
+                        <div class="section-title">
+                            <h4>Contact & Support</h4>
+                        </div>
+
+                        <div class="contact-grid">
+                            <div class="contact-card">
+                                <div class="contact-icon">
+                                    <i class="fas fa-phone"></i>
+                                </div>
+                                <div class="contact-content">
+                                    <h5>Customer Service</h5>
+                                    <p>1 (854) 5537663752</p>
+                                    <span>Available 24/7</span>
+                                </div>
+                                <button class="contact-btn">
+                                    <i class="fas fa-phone"></i>
+                                </button>
+                            </div>
+
+                            <div class="contact-card">
+                                <div class="contact-icon">
+                                    <i class="fas fa-comments"></i>
+                                </div>
+                                <div class="contact-content">
+                                    <h5>Live Chat</h5>
+                                    <p>Chat with support</p>
+                                    <span>Mon-Fri 8AM-8PM</span>
+                                </div>
+                                <button class="contact-btn">
+                                    <i class="fas fa-comments"></i>
+                                </button>
+                            </div>
+
+                            <div class="contact-card">
+                                <div class="contact-icon">
+                                    <i class="fas fa-envelope"></i>
+                                </div>
+                                <div class="contact-content">
+                                    <h5>Email Support</h5>
+                                    <p>customerservice0549@gmail.com</p>
+                                    <span>Response within 24h</span>
+                                </div>
+                                <button class="contact-btn">
+                                    <i class="fas fa-envelope"></i>
+                                </button>
+                            </div>
+
+                            <div class="contact-card">
+                                <div class="contact-icon">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                </div>
+                                <div class="contact-content">
+                                    <h5>Find Branch</h5>
+                                    <p>Locate nearby branches</p>
+                                    <span>1,200+ locations</span>
+                                </div>
+                                <button class="contact-btn">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation Content Sections -->
+        <!-- Deposit Tab Content -->
+        <div class="bottom-tab-content" id="deposit-content" style="display: none;">
+            <div class="deposit-container">
+                <div class="deposit-header">
+                    <h3>Make Deposits</h3>
+                    <p>Add money to your accounts</p>
+                </div>
+
+                <!-- Deposit Options -->
+                <div class="deposit-options">
+                    <div class="deposit-card primary">
+                        <div class="deposit-icon">
+                            <i class="fas fa-mobile-alt"></i>
+                        </div>
+                        <div class="deposit-info">
+                            <h4>Mobile Check Deposit</h4>
+                            <p>Deposit checks using your phone camera</p>
+                        </div>
+                        <button class="deposit-btn" data-deposit="mobile-check">
+                            <i class="fas fa-camera"></i>
+                            <span>Start Deposit</span>
+                        </button>
+                    </div>
+
+                    <div class="deposit-card">
+                        <div class="deposit-icon">
+                            <i class="fas fa-university"></i>
+                        </div>
+                        <div class="deposit-info">
+                            <h4>Direct Deposit</h4>
+                            <p>Set up automatic paycheck deposits</p>
+                        </div>
+                        <button class="deposit-btn" data-deposit="direct-deposit">
+                            <i class="fas fa-plus"></i>
+                            <span>Setup</span>
+                        </button>
+                    </div>
+
+                    <div class="deposit-card">
+                        <div class="deposit-icon">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </div>
+                        <div class="deposit-info">
+                            <h4>ATM Deposit</h4>
+                            <p>Find nearby ATMs for cash deposits</p>
+                        </div>
+                        <button class="deposit-btn" data-deposit="find-atm">
+                            <i class="fas fa-search"></i>
+                            <span>Find ATM</span>
+                        </button>
+                    </div>
+
+                    <div class="deposit-card">
+                        <div class="deposit-icon">
+                            <i class="fas fa-money-bill-wave"></i>
+                        </div>
+                        <div class="deposit-info">
+                            <h4>Wire Transfer</h4>
+                            <p>Receive money via wire transfer</p>
+                        </div>
+                        <button class="deposit-btn" data-deposit="wire-transfer">
+                            <i class="fas fa-info"></i>
+                            <span>Wire Info</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Recent Deposits -->
+                <div class="recent-deposits">
+                    <div class="section-header">
+                        <h4>Recent Deposits</h4>
+                        <button class="view-all-btn" data-action="view-all-deposits">View All</button>
+                    </div>
+                    <div class="deposits-list"><!-- Populated dynamically --></div>
+                </div>
+
+                <!-- Deposit Limits -->
+                <div class="deposit-limits">
+                    <h4>Daily Deposit Limits</h4>
+                    <div class="limits-grid">
+                        <div class="limit-card">
+                            <div class="limit-type">Mobile Check</div>
+                            <div class="limit-amount">$2,500 / day</div>
+                            <div class="limit-used">Used: $0</div>
+                        </div>
+                        <div class="limit-card">
+                            <div class="limit-type">ATM Cash</div>
+                            <div class="limit-amount">$5,000 / day</div>
+                            <div class="limit-used">Used: $500</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pay & Transfer Tab Content -->
+        <div class="bottom-tab-content" id="pay-transfer-content" style="display: none;">
+            <div class="pay-transfer-container">
+                <div class="pay-transfer-header">
+                    <h3>Pay & Transfer</h3>
+                    <p>Send money and pay bills</p>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="quick-pay-actions">
+                    <button class="quick-pay-card primary" data-action="send-money">
+                        <div class="quick-pay-icon">
+                            <i class="fas fa-paper-plane"></i>
+                        </div>
+                        <div class="quick-pay-info">
+                            <h4>Send Money</h4>
+                            <p>Transfer to friends & family</p>
+                        </div>
+                    </button>
+                    <button class="quick-pay-card" data-action="pay-bills">
+                        <div class="quick-pay-icon">
+                            <i class="fas fa-file-invoice-dollar"></i>
+                        </div>
+                        <div class="quick-pay-info">
+                            <h4>Pay Bills</h4>
+                            <p>Manage recurring payments</p>
+                        </div>
+                    </button>
+                    <button class="quick-pay-card" data-action="between-accounts">
+                        <div class="quick-pay-icon">
+                            <i class="fas fa-exchange-alt"></i>
+                        </div>
+                        <div class="quick-pay-info">
+                            <h4>Between Accounts</h4>
+                            <p>Transfer your money</p>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- Payment Methods -->
+                <div class="payment-methods">
+                    <h4>Payment Methods</h4>
+                    <div class="methods-grid">
+                        <button class="method-card" data-method="zelle">
+                            <div class="method-icon zelle">
+                                <i class="fas fa-bolt"></i>
+                            </div>
+                            <div class="method-info">
+                                <h5>Zelle®</h5>
+                                <p>Send money in minutes</p>
+                            </div>
+                        </button>
+                        <button class="method-card" data-method="wire">
+                            <div class="method-icon wire">
+                                <i class="fas fa-globe"></i>
+                            </div>
+                            <div class="method-info">
+                                <h5>Wire Transfer</h5>
+                                <p>Domestic & international</p>
+                            </div>
+                        </button>
+                        <button class="method-card" data-method="ach">
+                            <div class="method-icon ach">
+                                <i class="fas fa-university"></i>
+                            </div>
+                            <div class="method-info">
+                                <h5>ACH Transfer</h5>
+                                <p>Bank to bank transfers</p>
+                            </div>
+                        </button>
+                        <button class="method-card" data-method="check">
+                            <div class="method-icon check">
+                                <i class="fas fa-money-check"></i>
+                            </div>
+                            <div class="method-info">
+                                <h5>Online Check</h5>
+                                <p>Electronic check payments</p>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Scheduled Payments removed -->
+
+                <!-- Recent Transfers -->
+                <div class="recent-transfers">
+                    <div class="section-header">
+                        <h4>Recent Activity</h4>
+                        <button class="view-all-btn" data-action="view-all-transfers">View All</button>
+                    </div>
+                    <div class="transfers-list"><!-- Populated dynamically --></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Explore Tab Content -->
+        <div class="bottom-tab-content" id="explore-content" style="display: none;">
+            <div class="explore-container">
+                <div class="explore-header">
+                    <h3>Explore</h3>
+                    <p>Financial tools, offers & more</p>
+                </div>
+
+                <!-- Featured Offers -->
+                <div class="featured-offers">
+                    <h4>Featured Offers</h4>
+                    <div class="offers-scroll">
+                        <div class="offer-card featured">
+                            <div class="offer-badge">Limited Time</div>
+                            <div class="offer-content">
+                                <h5>High Yield Savings</h5>
+                                <p class="offer-rate">4.50% APY</p>
+                                <p>No minimum balance required</p>
+                                <button class="offer-btn" data-offer="savings">Learn More</button>
+                            </div>
+                        </div>
+                        <div class="offer-card">
+                            <div class="offer-content">
+                                <h5>Cashback Credit Card</h5>
+                                <p class="offer-rate">3% Cashback</p>
+                                <p>On gas and groceries</p>
+                                <button class="offer-btn" data-offer="credit">Apply Now</button>
+                            </div>
+                        </div>
+                        <div class="offer-card">
+                            <div class="offer-content">
+                                <h5>Personal Loan</h5>
+                                <p class="offer-rate">From 5.99% APR</p>
+                                <p>Consolidate debt or finance goals</p>
+                                <button class="offer-btn" data-offer="loan">Get Quote</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Financial Tools -->
+                <div class="financial-tools">
+                    <h4>Financial Tools</h4>
+                    <div class="tools-grid">
+                        <button class="tool-card" data-tool="calculator">
+                            <div class="tool-icon">
+                                <i class="fas fa-calculator"></i>
+                            </div>
+                            <div class="tool-info">
+                                <h5>Loan Calculator</h5>
+                                <p>Calculate monthly payments</p>
+                            </div>
+                        </button>
+                        <button class="tool-card" data-tool="budget">
+                            <div class="tool-icon">
+                                <i class="fas fa-chart-pie"></i>
+                            </div>
+                            <div class="tool-info">
+                                <h5>Budget Tracker</h5>
+                                <p>Track your spending</p>
+                            </div>
+                        </button>
+                        <button class="tool-card" data-tool="investment">
+                            <div class="tool-icon">
+                                <i class="fas fa-chart-line"></i>
+                            </div>
+                            <div class="tool-info">
+                                <h5>Investment Options</h5>
+                                <p>Grow your wealth</p>
+                            </div>
+                        </button>
+                        <button class="tool-card" data-tool="retirement">
+                            <div class="tool-icon">
+                                <i class="fas fa-piggy-bank"></i>
+                            </div>
+                            <div class="tool-info">
+                                <h5>Retirement Planning</h5>
+                                <p>Plan for your future</p>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Educational Content -->
+                <div class="educational-content">
+                    <h4>Financial Education</h4>
+                    <div class="education-list">
+                        <div class="education-item">
+                            <div class="education-icon">
+                                <i class="fas fa-graduation-cap"></i>
+                            </div>
+                            <div class="education-content">
+                                <h5>Building Credit Score</h5>
+                                <p>Learn strategies to improve your credit</p>
+                                <span class="education-duration">5 min read</span>
+                            </div>
+                            <button class="education-btn" data-education="credit">Read</button>
+                        </div>
+                        <div class="education-item">
+                            <div class="education-icon">
+                                <i class="fas fa-home"></i>
+                            </div>
+                            <div class="education-content">
+                                <h5>First-Time Home Buying</h5>
+                                <p>Complete guide to buying your first home</p>
+                                <span class="education-duration">12 min read</span>
+                            </div>
+                            <button class="education-btn" data-education="home">Read</button>
+                        </div>
+                        <div class="education-item">
+                            <div class="education-icon">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <div class="education-content">
+                                <h5>Identity Protection</h5>
+                                <p>Protect yourself from fraud and scams</p>
+                                <span class="education-duration">8 min read</span>
+                            </div>
+                            <button class="education-btn" data-education="protection">Read</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rewards & Benefits -->
+                <div class="rewards-benefits">
+                    <h4>Your Rewards</h4>
+                    <div class="rewards-card">
+                        <div class="rewards-header">
+                            <div class="rewards-icon">
+                                <i class="fas fa-gift"></i>
+                            </div>
+                            <div class="rewards-info">
+                                <h5>Rewards Points</h5>
+                                <p class="rewards-balance">8,347 points</p>
+                                <p>$83.47 value</p>
+                            </div>
+                            <button class="rewards-btn" data-action="redeem-rewards">Redeem</button>
+                        </div>
+                        <div class="rewards-options">
+                            <button class="reward-option" data-reward="cashback">
+                                <i class="fas fa-dollar-sign"></i>
+                                <span>Cash Back</span>
+                            </button>
+                            <button class="reward-option" data-reward="travel">
+                                <i class="fas fa-plane"></i>
+                                <span>Travel</span>
+                            </button>
+                            <button class="reward-option" data-reward="gift-cards">
+                                <i class="fas fa-gift"></i>
+                                <span>Gift Cards</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Menu Tab Content -->
+        <div class="bottom-tab-content" id="menu-content" style="display: none;">
+            <div class="menu-container">
+                <div class="menu-header">
+                    <div class="user-profile">
+                        <div class="user-avatar"></div>
+                        <div class="user-info">
+                            <h3></h3>
+                        </div>
+                        <button class="profile-edit" data-action="edit-profile">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Account Management -->
+                <div class="menu-section">
+                    <h4>Account Management</h4>
+                    <div class="menu-items">
+                        <button class="menu-item" data-menu="personal-info">
+                            <div class="menu-icon">
+                                <i class="fas fa-user-edit"></i>
+                            </div>
+                            <div class="menu-content">
+                                <h5>Personal Information</h5>
+                                <p>Update contact details and preferences</p>
+                            </div>
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                        <button class="menu-item" data-menu="documents">
+                            <div class="menu-icon">
+                                <i class="fas fa-file-alt"></i>
+                            </div>
+                            <div class="menu-content">
+                                <h5>Documents & Statements</h5>
+                                <p>Access all account documents</p>
+                            </div>
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                        <button class="menu-item" data-menu="tax-documents">
+                            <div class="menu-icon">
+                                <i class="fas fa-file-invoice"></i>
+                            </div>
+                            <div class="menu-content">
+                                <h5>Tax Documents</h5>
+                                <p>Download 1099s and tax forms</p>
+                            </div>
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Security & Privacy -->
+                <div class="menu-section">
+                    <h4>Security & Privacy</h4>
+                    <div class="menu-items">
+                        <button class="menu-item" data-menu="security-settings">
+                            <div class="menu-icon">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <div class="menu-content">
+                                <h5>Security Settings</h5>
+                                <p>Manage passwords and 2FA</p>
+                            </div>
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                        <button class="menu-item" data-menu="privacy-controls">
+                            <div class="menu-icon">
+                                <i class="fas fa-user-secret"></i>
+                            </div>
+                            <div class="menu-content">
+                                <h5>Privacy Controls</h5>
+                                <p>Manage data sharing preferences</p>
+                            </div>
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Support & Help -->
+                <div class="menu-section">
+                    <h4>Support & Help</h4>
+                    <div class="menu-items">
+                        <button class="menu-item" data-menu="customer-service">
+                            <div class="menu-icon">
+                                <i class="fas fa-headset"></i>
+                            </div>
+                            <div class="menu-content">
+                                <h5>Customer Service</h5>
+                                <p>24/7 support and assistance</p>
+                            </div>
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- App Settings -->
+                <div class="menu-section">
+                    <h4>App Settings</h4>
+                    <div class="menu-items">
+                        <div class="menu-item toggle-item">
+                            <div class="menu-icon">
+                                <i class="fas fa-bell"></i>
+                            </div>
+                            <div class="menu-content">
+                                <h5>Push Notifications</h5>
+                                <p>Receive account alerts</p>
+                            </div>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="push-notifications" checked>
+                                <label for="push-notifications"></label>
+                            </div>
+                        </div>
+                        <div class="menu-item toggle-item">
+                            <div class="menu-icon">
+                                <i class="fas fa-moon"></i>
+                            </div>
+                            <div class="menu-content">
+                                <h5>Dark Mode</h5>
+                                <p>Switch to dark theme</p>
+                            </div>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="dark-mode">
+                                <label for="dark-mode"></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Legal & About -->
+                <div class="menu-section">
+                    <h4>Legal & About</h4>
+                    <div class="menu-items">
+                        <button class="menu-item" data-menu="terms">
+                            <div class="menu-icon">
+                                <i class="fas fa-file-contract"></i>
+                            </div>
+                            <div class="menu-content">
+                                <h5>Terms & Conditions</h5>
+                            </div>
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                        <button class="menu-item" data-menu="privacy-policy">
+                            <div class="menu-icon">
+                                <i class="fas fa-user-shield"></i>
+                            </div>
+                            <div class="menu-content">
+                                <h5>Privacy Policy</h5>
+                            </div>
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                        <button class="menu-item" data-menu="about">
+                            <div class="menu-icon">
+                                <i class="fas fa-info-circle"></i>
+                            </div>
+                            <div class="menu-content">
+                                <h5>About This App</h5>
+                                <p>Version 2.3.1</p>
+                            </div>
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sign Out -->
+                <div class="menu-section">
+                    <button class="sign-out-btn" data-action="sign-out">
+                        <div class="menu-icon">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </div>
+                        <span>Sign Out</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Dashboard -->
+        <div class="admin-dashboard" id="admin-dashboard" style="display: none;">
+            <div class="admin-header">
+                <button class="back-to-menu">
+                    <i class="fas fa-arrow-left"></i>
+                    Back to Menu
+                </button>
+                <h2>Admin Dashboard</h2>
+                <p>Transaction Approval System</p>
+            </div>
+            
+            <div class="admin-content">
+                <div class="pending-transactions">
+                    <h3>Pending Transactions</h3>
+                    <div class="pending-list" id="pending-transactions-list">
+                        <!-- Pending transactions will be populated here -->
+                    </div>
+                </div>
+                
+                <div class="admin-stats">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h4 id="pending-count">0</h4>
+                            <p>Pending Approvals</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h4 id="approved-count">0</h4>
+                            <p>Approved Today</p>
+                        </div>
+                    </div>
+                    <div class="stat-card clickable" id="total-users-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h4 id="total-users-count">0</h4>
+                            <p>Total Users</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- All Users Modal -->
+        <div class="all-users-modal" id="all-users-modal" style="display: none;">
+            <div class="modal-overlay"></div>
+            <div class="modal-content all-users-content">
+                <div class="modal-header">
+                    <h3>All Users Management</h3>
+                    <button class="close-modal" onclick="closeAllUsersModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="users-grid" id="all-users-grid">
+                        <!-- Users will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <button class="nav-item active">
+                <i class="fas fa-home"></i>
+                <span>Accounts</span>
+            </button>
+            <button class="nav-item">
+                <i class="fas fa-plus-circle"></i>
+                <span>Deposit</span>
+            </button>
+            <button class="nav-item">
+                <i class="fas fa-exchange-alt"></i>
+                <span>Pay & Transfer</span>
+            </button>
+            <button class="nav-item">
+                <i class="fas fa-compass"></i>
+                <span>Explore</span>
+            </button>
+            <button class="nav-item">
+                <i class="fas fa-bars"></i>
+                <span>Menu</span>
+            </button>
+        </nav>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

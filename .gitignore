@@ -1,0 +1,34 @@
+# Node
+node_modules/
+**/node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env files
+.env
+**/.env
+**/.env.*
+server/.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Build outputs
+.dist/
+dist/
+.build/
+build/
+.out/
+.vercel/
+
+# Coverage
+coverage/

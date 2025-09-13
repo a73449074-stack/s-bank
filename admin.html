@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - SecureBank</title>
+    <link rel="stylesheet" href="admin-styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Admin Header -->
+        <header class="admin-header">
+            <div class="admin-header-content">
+                <button class="hamburger-btn" aria-label="Open menu" aria-controls="adminSidebar" aria-expanded="false">
+                    <span></span><span></span><span></span>
+                </button>
+                <div class="admin-logo">
+                    <i class="fas fa-shield-alt"></i>
+                    <h1>Admin Dashboard</h1>
+                </div>
+                <div class="admin-user-info">
+                    <span class="admin-welcome">Welcome, Administrator</span>
+                    <div class="admin-actions">
+                        <button class="admin-btn logout-btn" onclick="logout()">
+                            <i class="fas fa-sign-out-alt"></i>
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Admin Sidebar -->
+        <aside class="admin-sidebar" id="adminSidebar" aria-hidden="true">
+            <nav class="admin-nav">
+                <ul class="nav-menu">
+                    <li class="nav-item active">
+                        <a href="#dashboard" class="nav-link" data-section="dashboard">
+                            <i class="fas fa-tachometer-alt"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#users" class="nav-link" data-section="users">
+                            <i class="fas fa-users"></i>
+                            <span>User Management</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#accounts" class="nav-link" data-section="accounts">
+                            <i class="fas fa-university"></i>
+                            <span>Account Management</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#transactions" class="nav-link" data-section="transactions">
+                            <i class="fas fa-exchange-alt"></i>
+                            <span>Transactions</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#reports" class="nav-link" data-section="reports">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>Reports</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#security" class="nav-link" data-section="security">
+                            <i class="fas fa-shield-alt"></i>
+                            <span>Security</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#settings" class="nav-link" data-section="settings">
+                            <i class="fas fa-cog"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+    <div class="sidebar-backdrop" hidden></div>
+    <main class="admin-main">
+            <!-- Dashboard Section -->
+            <section class="admin-section active" id="dashboard">
+                <div class="section-header">
+                    <h2>Dashboard Overview</h2>
+                    <div class="section-actions">
+                        <button class="admin-btn secondary">
+                            <i class="fas fa-download"></i>
+                            Export Data
+                        </button>
+                        <button class="admin-btn primary">
+                            <i class="fas fa-plus"></i>
+                            Add New
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3>1,245</h3>
+                            <p>Total Users</p>
+                            <span class="stat-change positive">+12% this month</span>
+                        </div>
+                    </div>
+                    <div class="stat-card pending-users-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-user-clock"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3>0</h3>
+                            <p>Pending Users</p>
+                            <span class="stat-change pending">Awaiting approval</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-university"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3>892</h3>
+                            <p>Active Accounts</p>
+                            <span class="stat-change positive">+8% this month</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-dollar-sign"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3>$2.4M</h3>
+                            <p>Total Balance</p>
+                            <span class="stat-change positive">+15% this month</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-exchange-alt"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3>3,456</h3>
+                            <p>Transactions Today</p>
+                            <span class="stat-change negative">-3% from yesterday</span>
+                        </div>
+                    </div>
+                    <div class="stat-card pending-transactions-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-hourglass-half"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3>0</h3>
+                            <p>Pending Transactions</p>
+                            <span class="stat-change pending">Review requests</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts and Tables -->
+                <div class="dashboard-grid">
+                    <div class="dashboard-widget">
+                        <div class="widget-header">
+                            <h3>Recent Transactions</h3>
+                            <button class="widget-action">View All</button>
+                        </div>
+                        <div class="widget-content">
+                            <div class="transaction-list">
+                                <div class="transaction-item">
+                                    <div class="transaction-user">
+                                        <div class="user-avatar">CM</div>
+                                        <div class="user-info">
+                                            <span class="user-name">Carmen E Culver</span>
+                                            <span class="transaction-time">2 hours ago</span>
+                                        </div>
+                                    </div>
+                                    <div class="transaction-amount positive">+$200.00</div>
+                                </div>
+                                <div class="transaction-item">
+                                    <div class="transaction-user">
+                                        <div class="user-avatar">JD</div>
+                                        <div class="user-info">
+                                            <span class="user-name">John Doe</span>
+                                            <span class="transaction-time">4 hours ago</span>
+                                        </div>
+                                    </div>
+                                    <div class="transaction-amount negative">-$50.00</div>
+                                </div>
+                                <div class="transaction-item">
+                                    <div class="transaction-user">
+                                        <div class="user-avatar">AS</div>
+                                        <div class="user-info">
+                                            <span class="user-name">Alice Smith</span>
+                                            <span class="transaction-time">6 hours ago</span>
+                                        </div>
+                                    </div>
+                                    <div class="transaction-amount positive">+$1,000.00</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-widget">
+                        <div class="widget-header">
+                            <h3>System Status</h3>
+                            <button class="widget-action">Refresh</button>
+                        </div>
+                        <div class="widget-content">
+                            <div class="status-list">
+                                <div class="status-item">
+                                    <div class="status-indicator online"></div>
+                                    <span>Core Banking System</span>
+                                    <span class="status-value">Online</span>
+                                </div>
+                                <div class="status-item">
+                                    <div class="status-indicator online"></div>
+                                    <span>Payment Gateway</span>
+                                    <span class="status-value">Online</span>
+                                </div>
+                                <div class="status-item">
+                                    <div class="status-indicator warning"></div>
+                                    <span>Mobile App API</span>
+                                    <span class="status-value">Slow</span>
+                                </div>
+                                <div class="status-item">
+                                    <div class="status-indicator online"></div>
+                                    <span>Security System</span>
+                                    <span class="status-value">Online</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Users Section -->
+            <section class="admin-section" id="users">
+                <div class="section-header">
+                    <h2>User Management</h2>
+                    <div class="section-actions">
+                        <button class="admin-btn secondary">
+                            <i class="fas fa-filter"></i>
+                            Filter
+                        </button>
+                        <button class="admin-btn primary">
+                            <i class="fas fa-user-plus"></i>
+                            Add User
+                        </button>
+                    </div>
+                </div>
+                <div class="admin-table-container">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Email</th>
+                                <th>Account Type</th>
+                                <th>Balance</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Other sections (placeholder content) -->
+            <section class="admin-section" id="accounts">
+                <div class="section-header">
+                    <h2>Account Management</h2>
+                    <div class="section-actions">
+                        <button class="admin-btn secondary" id="refresh-accounts"><i class="fas fa-sync"></i> Refresh</button>
+                    </div>
+                </div>
+                <div class="account-mgmt">
+                    <div class="account-mgmt-controls">
+                        <label>Select user</label>
+                        <select id="account-user-select"></select>
+                    </div>
+                    <div class="account-mgmt-grid">
+                        <div class="account-card">
+                            <h3><i class="fas fa-id-card"></i> User Details</h3>
+                            <div class="details" id="am-user-details">
+                                <p><strong>Name:</strong> <span data-field="name">—</span></p>
+                                <p><strong>Email:</strong> <span data-field="email">—</span></p>
+                                <p><strong>Account #:</strong> <span data-field="accountNumber">—</span></p>
+                                <p><strong>Status:</strong> <span data-field="status">—</span></p>
+                                <p><strong>Type:</strong> <span data-field="accountType">—</span></p>
+                                <p><strong>Phone:</strong> <span data-field="phone">—</span></p>
+                                <p><strong>Balance:</strong> <span data-field="balance">—</span></p>
+                            </div>
+                        </div>
+                        <div class="account-card">
+                            <h3><i class="fas fa-tools"></i> Recovery & Security</h3>
+                            <div class="actions">
+                                <button class="admin-btn" id="am-reset-password"><i class="fas fa-key"></i> Reset Password</button>
+                                <button class="admin-btn" id="am-reset-pin"><i class="fas fa-hashtag"></i> Reset PIN</button>
+                                <button class="admin-btn" id="am-unlock"><i class="fas fa-unlock"></i> Unlock Account</button>
+                                <button class="admin-btn" id="am-freeze-toggle"><i class="fas fa-snowflake"></i> Freeze/Unfreeze</button>
+                                <button class="admin-btn" id="am-force-logout"><i class="fas fa-sign-out-alt"></i> Force Logout</button>
+                            </div>
+                        </div>
+                        <div class="account-card">
+                            <h3><i class="fas fa-user-cog"></i> Account Updates</h3>
+                            <div class="form">
+                                <label>Account Type</label>
+                                <select id="am-account-type">
+                                    <option value="checking">Checking</option>
+                                    <option value="savings">Savings</option>
+                                    <option value="business">Business</option>
+                                </select>
+                                <label>Phone</label>
+                                <input type="text" id="am-phone" placeholder="Enter phone" />
+                                <div class="row">
+                                    <button class="admin-btn primary" id="am-save-updates"><i class="fas fa-save"></i> Save Changes</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="admin-section" id="transactions">
+                <div class="section-header">
+                    <h2>Transactions</h2>
+                    <div class="section-actions">
+                        <button class="admin-btn secondary" id="refresh-transactions"><i class="fas fa-sync"></i> Refresh</button>
+                    </div>
+                </div>
+                <div class="transactions-grid">
+                    <div class="dashboard-widget">
+                        <div class="widget-header">
+                            <h3>Pending Transactions <span class="badge" id="admin-pending-count">0</span></h3>
+                            <button class="widget-action" id="view-approved-today">Approved Today</button>
+                        </div>
+                        <div class="widget-content">
+                            <div id="admin-pending-transactions-list" class="pending-transactions-list">
+                                <div class="empty-pending">
+                                    <i class="fas fa-check-circle"></i>
+                                    <h4>No pending transactions</h4>
+                                    <p>New requests will appear here for review.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="admin-section" id="reports">
+                <div class="section-header">
+                    <h2>Reports & Analytics</h2>
+                    <div class="section-actions">
+                        <button class="admin-btn secondary" id="refresh-reports"><i class="fas fa-sync"></i> Refresh</button>
+                        <button class="admin-btn primary" id="export-reports"><i class="fas fa-file-export"></i> Export</button>
+                    </div>
+                </div>
+                <div class="reports-grid">
+                    <div class="stats-grid">
+                        <div class="stat-card"><div class="stat-icon"><i class="fas fa-check"></i></div><div class="stat-content"><h3 id="rep-approvals-24h">0</h3><p>Approvals (24h)</p></div></div>
+                        <div class="stat-card"><div class="stat-icon"><i class="fas fa-times"></i></div><div class="stat-content"><h3 id="rep-declines-24h">0</h3><p>Declines (24h)</p></div></div>
+                        <div class="stat-card"><div class="stat-icon"><i class="fas fa-user-slash"></i></div><div class="stat-content"><h3 id="rep-deleted-users-7d">0</h3><p>Users Deleted (7d)</p></div></div>
+                        <div class="stat-card"><div class="stat-icon"><i class="fas fa-snowflake"></i></div><div class="stat-content"><h3 id="rep-frozen-7d">0</h3><p>Accounts Frozen (7d)</p></div></div>
+                    </div>
+                    <div class="report-filters" style="margin: 16px 0; display: flex; gap: 12px; align-items: center;">
+                        <label>Filter:</label>
+                        <select id="rep-filter-type">
+                            <option value="all">All Events</option>
+                            <option value="transaction_approved">Transaction Approved</option>
+                            <option value="transaction_declined">Transaction Declined</option>
+                            <option value="user_deleted">User Deleted</option>
+                            <option value="user_frozen">User Frozen</option>
+                            <option value="user_unfrozen">User Unfrozen</option>
+                            <option value="password_reset">Password Reset</option>
+                            <option value="pin_reset">PIN Reset</option>
+                            <option value="user_unlocked">User Unlocked</option>
+                            <option value="user_forced_logout">Forced Logout</option>
+                            <option value="user_profile_updated">Profile Updated</option>
+                        </select>
+                        <input id="rep-search" type="text" placeholder="Search user/email/account/desc" style="flex:1;"/>
+                    </div>
+                    <div class="admin-table-container">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Event</th>
+                                    <th>Admin</th>
+                                    <th>Target</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reports-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section class="admin-section" id="security">
+                <div class="section-header">
+                    <h2>Security Settings</h2>
+                    <div class="section-actions">
+                        <button class="admin-btn secondary" id="refresh-security"><i class="fas fa-sync"></i> Refresh</button>
+                    </div>
+                </div>
+                <div class="security-grid">
+                    <div class="account-card">
+                        <h3><i class="fas fa-sliders-h"></i> Global Security Settings</h3>
+                        <div class="form">
+                            <label>Session Timeout (minutes)</label>
+                            <input type="number" id="sec-session-timeout" min="5" step="5" placeholder="e.g., 60">
+                            <label>Lockout Threshold (failed attempts)</label>
+                            <input type="number" id="sec-lockout-threshold" min="1" step="1" placeholder="e.g., 5">
+                            <label>Lockout Duration (minutes)</label>
+                            <input type="number" id="sec-lockout-minutes" min="1" step="5" placeholder="e.g., 30">
+                            <label class="remember-me" style="margin-top:8px;">
+                                <input type="checkbox" id="sec-require-mfa">
+                                <span class="checkmark"></span>
+                                Require MFA for admin login (UI only)
+                            </label>
+                            <div class="row">
+                                <button class="admin-btn primary" id="sec-save-settings"><i class="fas fa-save"></i> Save Settings</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="account-card">
+                        <h3><i class="fas fa-user-shield"></i> Admin Account</h3>
+                        <div class="form">
+                            <label>Admin Email</label>
+                            <input type="email" id="sec-admin-email" placeholder="admin email">
+                            <label>Admin Password</label>
+                            <input type="password" id="sec-admin-password" placeholder="new password">
+                            <div class="row">
+                                <button class="admin-btn" id="sec-update-admin"><i class="fas fa-key"></i> Update Admin Credentials</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="account-card">
+                        <h3><i class="fas fa-user-clock"></i> Active Sessions</h3>
+                        <div id="sec-active-sessions" class="details">—</div>
+                        <div class="row" style="margin-top:8px;">
+                            <button class="admin-btn danger" id="sec-force-logout-all"><i class="fas fa-sign-out-alt"></i> Force Logout All</button>
+                        </div>
+                    </div>
+
+                    <div class="account-card">
+                        <h3><i class="fas fa-ban"></i> Failed Login Attempts</h3>
+                        <div id="sec-failed-summary" class="details">—</div>
+                        <div class="row" style="margin-top:8px;">
+                            <button class="admin-btn" id="sec-clear-failed"><i class="fas fa-eraser"></i> Clear Failed Attempts</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="admin-section" id="settings">
+                <div class="section-header">
+                    <h2>System Settings</h2>
+                    <div class="section-actions">
+                        <button class="admin-btn secondary" id="refresh-settings"><i class="fas fa-sync"></i> Refresh</button>
+                        <button class="admin-btn primary" id="save-settings"><i class="fas fa-save"></i> Save</button>
+                    </div>
+                </div>
+                <div class="settings-grid">
+                    <div class="account-card">
+                        <h3><i class="fas fa-cogs"></i> Application</h3>
+                        <div class="form">
+                            <label>App Name</label>
+                            <input type="text" id="set-app-name" placeholder="Display name e.g. SecureBank">
+                            <label>Primary Color</label>
+                            <input type="color" id="set-primary-color" value="#667eea">
+                            <label>Logo (URL)</label>
+                            <input type="url" id="set-logo-url" placeholder="https://.../logo.png">
+                        </div>
+                    </div>
+
+                    <div class="account-card">
+                        <h3><i class="fas fa-headset"></i> Support Contacts</h3>
+                        <div class="form">
+                            <label>Support Email</label>
+                            <input type="email" id="set-support-email" placeholder="customerservice0549@gmail.com">
+                            <label>Support Phone (tel:)</label>
+                            <input type="text" id="set-support-phone" placeholder="+18545537663752">
+                        </div>
+                    </div>
+
+                    <div class="account-card">
+                        <h3><i class="fas fa-tools"></i> Maintenance</h3>
+                        <div class="form">
+                            <label class="remember-me">
+                                <input type="checkbox" id="set-maintenance-mode">
+                                <span class="checkmark"></span>
+                                Enable Maintenance Mode (block user login)
+                            </label>
+                            <label>Maintenance Message</label>
+                            <input type="text" id="set-maintenance-message" placeholder="We are performing scheduled maintenance.">
+                        </div>
+                    </div>
+
+                    <div class="account-card">
+                        <h3><i class="fas fa-database"></i> Data Tools</h3>
+                        <div class="row" style="gap:8px; flex-wrap:wrap;">
+                            <button class="admin-btn" id="set-export-users"><i class="fas fa-file-export"></i> Export Users</button>
+                            <button class="admin-btn" id="set-export-audit"><i class="fas fa-file-export"></i> Export Audit Logs</button>
+                            <button class="admin-btn danger" id="set-clear-pending"><i class="fas fa-trash"></i> Clear Pending Transactions</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>

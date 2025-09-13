@@ -1,0 +1,1934 @@
+// Admin Dashboard JavaScript
+
+class AdminDashboard {
+    constructor() {
+        this.currentSection = 'dashboard';
+        this.currentUser = null;
+        this.apiBase = (window.AppConfig && window.AppConfig.apiBaseUrl) || '';
+        this.init();
+    }
+
+    init() {
+        this.checkAdminAuth();
+        this.setupNavigation();
+        this.setupAdminActions();
+        this.setupMobileSidebar();
+        this.loadDashboardData();
+        this.setupRealTimeUpdates();
+    }
+
+    // --- Audit Logging ---
+    getAuditStore() {
+        try { return JSON.parse(localStorage.getItem('auditLogs') || '[]'); } catch { return []; }
+    }
+    setAuditStore(logs) {
+        localStorage.setItem('auditLogs', JSON.stringify(logs));
+    }
+    logAudit(eventType, target = {}, meta = {}) {
+        const logs = this.getAuditStore();
+        const entry = {
+            id: Date.now().toString(),
+            eventType, // e.g., 'transaction_approved', 'transaction_declined', 'user_deleted', 'user_frozen'
+            timestamp: new Date().toISOString(),
+            admin: this.currentUser ? { name: this.currentUser.name, email: this.currentUser.email } : null,
+            target,
+            meta
+        };
+        logs.unshift(entry);
+        this.setAuditStore(logs);
+        return entry.id;
+    }
+
+    // Check Admin Authentication
+    checkAdminAuth() {
+        const sessionData = localStorage.getItem('bankingAppSession') || 
+                           sessionStorage.getItem('bankingAppSession');
+
+        if (!sessionData) {
+            this.redirectToLogin();
+            return;
+        }
+
+        try {
+            const session = JSON.parse(sessionData);
+            this.currentUser = session.user;
+
+            if (session.user.role !== 'admin') {
+                this.showError('Access denied. Admin privileges required.');
+                setTimeout(() => {
+                    window.location.href = 'banking-app.html';
+                }, 2000);
+                return;
+            }
+
+            // Update welcome message
+            const welcomeElement = document.querySelector('.admin-welcome');
+            if (welcomeElement) {
+                welcomeElement.textContent = `Welcome, ${session.user.name}`;
+            }
+
+        } catch (error) {
+            console.error('Invalid session data:', error);
+            this.redirectToLogin();
+        }
+    }
+
+    redirectToLogin() {
+        this.showError('Session expired. Please log in again.');
+        setTimeout(() => {
+            window.location.href = 'index.html';
+        }, 1500);
+    }
+
+    // Setup Navigation
+    setupNavigation() {
+        const navLinks = document.querySelectorAll('.nav-link');
+        const sections = document.querySelectorAll('.admin-section');
+
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetSection = link.dataset.section;
+                this.switchSection(targetSection, navLinks, sections);
+                // Close sidebar on mobile after navigation
+                const sidebar = document.getElementById('adminSidebar');
+                const backdrop = document.querySelector('.sidebar-backdrop');
+                if (sidebar && sidebar.classList.contains('open')) {
+                    sidebar.classList.remove('open');
+                    sidebar.setAttribute('aria-hidden', 'true');
+                    const burger = document.querySelector('.hamburger-btn');
+                    if (burger) burger.setAttribute('aria-expanded', 'false');
+                    if (backdrop) backdrop.hidden = true;
+                }
+            });
+        });
+    }
+
+    setupMobileSidebar() {
+        const burger = document.querySelector('.hamburger-btn');
+        const sidebar = document.getElementById('adminSidebar');
+        const backdrop = document.querySelector('.sidebar-backdrop');
+        if (!burger || !sidebar || !backdrop) return;
+
+        const closeMenu = () => {
+            sidebar.classList.remove('open');
+            sidebar.setAttribute('aria-hidden', 'true');
+            burger.setAttribute('aria-expanded', 'false');
+            burger.classList.remove('is-open');
+            backdrop.hidden = true;
+            document.body.style.overflow = '';
+            // Ensure off-canvas position when closed on small screens
+            sidebar.style.left = window.innerWidth <= 900 ? '-300px' : '';
+        };
+        const openMenu = () => {
+            sidebar.classList.add('open');
+            sidebar.setAttribute('aria-hidden', 'false');
+            burger.setAttribute('aria-expanded', 'true');
+            burger.classList.add('is-open');
+            backdrop.hidden = false;
+
+            // Fallback: if any transform rules hide it due to edge widths, force visible
+            sidebar.style.transform = 'translateX(0)';
+            // Ensure it's in viewport height-wise
+            sidebar.style.top = '70px';
+            sidebar.style.height = 'calc(100vh - 70px)';
+            sidebar.style.left = '0px';
+            document.body.style.overflow = 'hidden';
+        };
+
+        burger.addEventListener('click', () => {
+            if (sidebar.classList.contains('open')) closeMenu(); else openMenu();
+        });
+        backdrop.addEventListener('click', closeMenu);
+
+        // Escape key closes
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeMenu();
+        });
+
+        // Keep state consistent on resize
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 900) {
+                // Desktop: show sidebar in place
+                sidebar.classList.remove('open');
+                sidebar.style.left = '';
+                sidebar.style.transform = '';
+                backdrop.hidden = true;
+                burger.classList.remove('is-open');
+                burger.setAttribute('aria-expanded', 'false');
+                document.body.style.overflow = '';
+            } else {
+                // Mobile: ensure off-canvas if not open
+                if (!sidebar.classList.contains('open')) {
+                    sidebar.style.left = '-300px';
+                }
+            }
+        });
+    }
+
+    switchSection(targetSection, navLinks, sections) {
+        const current = document.querySelector('.admin-section.active');
+        const nextLink = document.querySelector(`[data-section="${targetSection}"]`);
+        const nextSection = document.getElementById(targetSection);
+        if (!nextLink || !nextSection) return;
+
+        // Update nav active state
+        navLinks.forEach(link => link.closest('.nav-item').classList.remove('active'));
+        nextLink.closest('.nav-item').classList.add('active');
+
+        const doActivate = () => {
+            // Hide all sections first (except current which will be removed in animation end)
+            sections.forEach(s => { if (s !== current) s.classList.remove('active','leaving'); });
+            // Activate next
+            nextSection.classList.add('active');
+            this.currentSection = targetSection;
+            this.loadSectionData(targetSection);
+        };
+
+        if (current && current !== nextSection) {
+            // Animate leaving
+            current.classList.add('leaving');
+            current.addEventListener('animationend', () => {
+                current.classList.remove('active','leaving');
+            }, { once: true });
+            // Slight delay to allow leave anim to begin before activating next
+            setTimeout(doActivate, 50);
+        } else {
+            doActivate();
+        }
+    }
+
+    // Setup Admin Actions
+    setupAdminActions() {
+        // Logout button
+        const logoutBtn = document.querySelector('.logout-btn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                this.logout();
+            });
+        }
+
+        // Notification and profile buttons removed from header
+
+        // Total Users card click - show all users
+        const totalUsersCard = document.querySelector('.stat-card:nth-child(1)');
+        if (totalUsersCard) {
+            totalUsersCard.style.cursor = 'pointer';
+            totalUsersCard.classList.add('clickable');
+            totalUsersCard.addEventListener('click', () => {
+                this.showAllUsersModal();
+            });
+        }
+
+        // Pending Users card click - show pending users
+        const pendingUsersCard = document.querySelector('.stat-card:nth-child(2)');
+        if (pendingUsersCard) {
+            pendingUsersCard.style.cursor = 'pointer';
+            pendingUsersCard.classList.add('clickable');
+            pendingUsersCard.addEventListener('click', () => {
+                this.showPendingUsersModal();
+            });
+        }
+
+        // Pending Transactions card click - go to Transactions tab
+        const pendingTxCard = document.querySelector('.stats-grid .stat-card:nth-child(6)');
+        if (pendingTxCard) {
+            pendingTxCard.style.cursor = 'pointer';
+            pendingTxCard.classList.add('clickable');
+            pendingTxCard.addEventListener('click', () => {
+                this.switchSection('transactions', 
+                    document.querySelectorAll('.nav-link'),
+                    document.querySelectorAll('.admin-section'));
+            });
+        }
+
+        // Action buttons
+        this.setupActionButtons();
+    }
+
+    setupActionButtons() {
+        // Export Data button
+        const exportBtn = document.querySelector('.section-actions .secondary');
+        if (exportBtn && exportBtn.textContent.includes('Export')) {
+            exportBtn.addEventListener('click', () => {
+                this.exportData();
+            });
+        }
+
+        // Add New button
+        const addBtn = document.querySelector('.section-actions .primary');
+        if (addBtn && addBtn.textContent.includes('Add')) {
+            addBtn.addEventListener('click', () => {
+                this.addNewItem();
+            });
+        }
+
+        // Widget actions
+        const widgetActions = document.querySelectorAll('.widget-action');
+        widgetActions.forEach(action => {
+            action.addEventListener('click', (e) => {
+                const widgetTitle = e.target.closest('.dashboard-widget').querySelector('h3').textContent;
+                this.handleWidgetAction(widgetTitle);
+            });
+        });
+
+        // Table actions
+        const actionBtns = document.querySelectorAll('.action-btn');
+        actionBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const action = btn.textContent.toLowerCase();
+                const userRow = btn.closest('tr');
+                const userName = userRow.querySelector('.user-cell span').textContent;
+                this.handleUserAction(action, userName);
+            });
+        });
+    }
+
+    // Load Dashboard Data
+    loadDashboardData() {
+        // Simulate loading real-time data
+        this.updateStats();
+        this.loadRecentTransactions();
+        this.updateSystemStatus();
+    }
+
+    updateStats() {
+        // Get real user data from localStorage
+        let users = [];
+        let pendingUsers = [];
+        let pendingTxCount = 0;
+        try {
+            const storedUsers = localStorage.getItem('bankingUsers');
+            if (storedUsers) {
+                users = JSON.parse(storedUsers);
+            }
+
+            // Get pending users
+            const storedPendingUsers = localStorage.getItem('pendingUsers');
+            if (storedPendingUsers) {
+                pendingUsers = JSON.parse(storedPendingUsers);
+            }
+
+            // Get pending transactions
+            const storedPendingTx = localStorage.getItem('pendingTransactions');
+            if (storedPendingTx) {
+                const arr = JSON.parse(storedPendingTx);
+                pendingTxCount = Array.isArray(arr) ? arr.length : 0;
+            }
+        } catch (error) {
+            console.error('Error loading user data:', error);
+        }
+
+        // Calculate real stats
+        const activeUsers = users.filter(user => user.status === 'active');
+        const totalBalance = users.reduce((sum, user) => {
+            const key = `userBalance_${user.accountNumber || user.id}`;
+            const stored = parseFloat(localStorage.getItem(key));
+            const fallback = parseFloat((user.balance || '').toString().replace(/[$,]/g, '')) || 0;
+            const value = Number.isFinite(stored) ? stored : fallback;
+            return sum + value;
+        }, 0);
+        
+        const stats = {
+            totalUsers: users.length,
+            pendingUsers: pendingUsers.length,
+            activeAccounts: activeUsers.length,
+            totalBalance: '$' + (totalBalance / 1000000).toFixed(1) + 'M',
+            todayTransactions: Math.floor(Math.random() * 1000) + 3000, // Keep random for demo
+            pendingTx: pendingTxCount
+        };
+
+        // Update stat cards with animation
+        this.animateStatUpdate('.stat-card:nth-child(1) h3', stats.totalUsers.toLocaleString());
+        this.animateStatUpdate('.stat-card:nth-child(2) h3', stats.pendingUsers.toLocaleString());
+        this.animateStatUpdate('.stat-card:nth-child(3) h3', stats.activeAccounts.toLocaleString());
+        this.animateStatUpdate('.stat-card:nth-child(4) h3', stats.totalBalance);
+    this.animateStatUpdate('.stat-card:nth-child(5) h3', stats.todayTransactions.toLocaleString());
+    // Pending Transactions card is the 6th card now
+    this.animateStatUpdate('.stat-card:nth-child(6) h3', stats.pendingTx.toLocaleString());
+        // Try to overlay with backend values if API available
+        if (this.apiBase) {
+            // Users
+            fetch(`${this.apiBase}/api/users`).then(r => r.ok ? r.json() : null).then(apiUsers => {
+                if (Array.isArray(apiUsers) && apiUsers.length >= 0) {
+                    const active = apiUsers.filter(u => (u.status || 'active') === 'active');
+                    const totalBal = apiUsers.reduce((s,u)=> s + (Number(u.balance||0)), 0);
+                    this.animateStatUpdate('.stat-card:nth-child(1) h3', apiUsers.length.toLocaleString());
+                    this.animateStatUpdate('.stat-card:nth-child(3) h3', active.length.toLocaleString());
+                    this.animateStatUpdate('.stat-card:nth-child(4) h3', '$' + (totalBal / 1000000).toFixed(1) + 'M');
+                }
+            }).catch(()=>{});
+            // Pending transactions
+            fetch(`${this.apiBase}/api/transactions/pending`).then(r => r.ok ? r.json() : null).then(rows => {
+                if (Array.isArray(rows)) {
+                    this.animateStatUpdate('.stat-card:nth-child(6) h3', rows.length.toLocaleString());
+                }
+            }).catch(()=>{});
+        }
+    }
+
+    animateStatUpdate(selector, newValue) {
+        const element = document.querySelector(selector);
+        if (element) {
+            element.style.transform = 'scale(1.1)';
+            element.style.color = '#667eea';
+            
+            setTimeout(() => {
+                element.textContent = newValue;
+                element.style.transform = 'scale(1)';
+                element.style.color = '#333';
+            }, 200);
+        }
+    }
+
+    loadRecentTransactions() {
+        const transactionList = document.querySelector('.transaction-list');
+        if (!transactionList) return;
+        const logs = this.getAuditStore();
+        const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+        const recent = logs
+            .filter(l => l.eventType === 'transaction_approved' || l.eventType === 'transaction_declined')
+            .slice(0, 7);
+
+        if (!recent.length) {
+            transactionList.innerHTML = `
+                <div class="empty-pending" style="padding: 10px 0;">
+                    <i class="fas fa-inbox"></i>
+                    <h4>No recent approvals/declines</h4>
+                    <p>Approved or declined transactions will appear here.</p>
+                </div>`;
+            return;
+        }
+
+        const getUser = (tgt) => users.find(u => (tgt.userEmail && u.email === tgt.userEmail) || (tgt.accountNumber && u.accountNumber === tgt.accountNumber));
+        const initials = (nameOrEmail) => {
+            const s = (nameOrEmail || '').trim();
+            if (!s) return '—';
+            if (s.includes(' ')) return s.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase();
+            if (s.includes('@')) return s[0].toUpperCase();
+            return s.substring(0,2).toUpperCase();
+        };
+
+        const rows = recent.map(l => {
+            const tgt = l.target || {};
+            const meta = l.meta || {};
+            const u = getUser(tgt) || {};
+            const displayName = u.name || tgt.userEmail || tgt.accountNumber || 'User';
+            const amountNum = Number(meta.amount || 0);
+            const isDeposit = String(meta.type).toLowerCase() === 'deposit';
+            const amtPrefix = isDeposit ? '+' : '-';
+            const amtClass = l.eventType === 'transaction_approved' ? (isDeposit ? 'positive' : 'negative') : 'declined';
+            const timeText = new Date(l.timestamp).toLocaleString();
+            return `
+                <div class="transaction-item">
+                    <div class="transaction-user">
+                        <div class="user-avatar">${initials(u.name || tgt.userEmail || '')}</div>
+                        <div class="user-info">
+                            <span class="user-name">${displayName}</span>
+                            <span class="transaction-time">${timeText}</span>
+                        </div>
+                    </div>
+                    <div class="transaction-amount ${amtClass}">${amtPrefix}$${amountNum.toFixed(2)}</div>
+                </div>`;
+        }).join('');
+
+        transactionList.innerHTML = rows;
+
+        // Try overlay with backend audit logs
+        if (this.apiBase) {
+            fetch(`${this.apiBase}/api/audit`).then(r => r.ok ? r.json() : null).then(apiLogs => {
+                if (!Array.isArray(apiLogs) || !apiLogs.length) return;
+                const recentApi = apiLogs
+                    .filter(l => l.eventType === 'transaction_approved' || l.eventType === 'transaction_declined')
+                    .slice(0,7);
+                if (!recentApi.length) return;
+                const rows = recentApi.map(l => {
+                    const amountNum = Number(l.amount || 0);
+                    const isDeposit = String(l.type||'').toLowerCase() === 'deposit';
+                    const amtPrefix = isDeposit ? '+' : '-';
+                    const amtClass = l.eventType === 'transaction_approved' ? (isDeposit ? 'positive' : 'negative') : 'declined';
+                    const timeText = new Date(l.timestamp).toLocaleString();
+                    const displayName = l.userName || l.accountNumber || l.userEmail || 'User';
+                    const initials = (displayName||'U').toString().trim().split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase();
+                    return `
+                        <div class="transaction-item">
+                            <div class="transaction-user">
+                                <div class="user-avatar">${initials}</div>
+                                <div class="user-info">
+                                    <span class="user-name">${displayName}</span>
+                                    <span class="transaction-time">${timeText}</span>
+                                </div>
+                            </div>
+                            <div class="transaction-amount ${amtClass}">${amtPrefix}$${amountNum.toFixed(2)}</div>
+                        </div>`;
+                }).join('');
+                transactionList.innerHTML = rows;
+            }).catch(()=>{});
+        }
+    }
+
+    updateSystemStatus() {
+        const statusItems = document.querySelectorAll('.status-item');
+        statusItems.forEach((item, index) => {
+            const indicator = item.querySelector('.status-indicator');
+            const value = item.querySelector('.status-value');
+            
+            // Simulate random status updates
+            const statuses = ['online', 'warning', 'online', 'online'];
+            const values = ['Online', 'Slow', 'Online', 'Online'];
+            
+            if (Math.random() > 0.8) { // 20% chance of status change
+                const randomStatus = Math.random() > 0.7 ? 'warning' : 'online';
+                const randomValue = randomStatus === 'warning' ? 'Slow' : 'Online';
+                
+                indicator.className = `status-indicator ${randomStatus}`;
+                value.textContent = randomValue;
+            }
+        });
+    }
+
+    // Load Section-Specific Data
+    loadSectionData(section) {
+        switch (section) {
+            case 'users':
+                this.loadUserManagement();
+                break;
+            case 'accounts':
+                this.loadAccountManagement();
+                break;
+            case 'transactions':
+                this.loadAdminTransactions();
+                break;
+            case 'reports':
+                this.loadReports();
+                break;
+            case 'security':
+                this.loadSecuritySettings();
+                break;
+            case 'settings':
+                this.loadSystemSettings();
+                break;
+        }
+    }
+
+    loadUserManagement() {
+        const tbody = document.getElementById('users-table-body');
+        if (!tbody) return;
+        let users = [];
+        try {
+            users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+        } catch {}
+        // Only verified/approved users (status present)
+        const verified = users.filter(u => (u.status || 'active') !== 'pending');
+        tbody.innerHTML = verified.map(u => {
+            const initials = u.name.split(' ').map(n => n[0]).join('');
+            const status = u.status || 'active';
+            const balanceKey = `userBalance_${u.accountNumber || u.id}`;
+            const numeric = parseFloat(localStorage.getItem(balanceKey));
+            const fallback = parseFloat((u.balance || '').toString().replace(/[$,]/g, '')) || 0;
+            const displayBal = Number.isFinite(numeric) ? numeric : fallback;
+            const isFrozen = status === 'frozen';
+            return `
+                <tr data-user="${u.accountNumber}">
+                    <td>
+                        <div class="user-cell">
+                            <div class="user-avatar">${initials}</div>
+                            <span>${u.name}</span>
+                        </div>
+                    </td>
+                    <td>${u.email}</td>
+                    <td>${u.accountType || 'Checking'}</td>
+                    <td>$${displayBal.toFixed(2)}</td>
+                    <td><span class="status-badge ${status}">${status.charAt(0).toUpperCase() + status.slice(1)}</span></td>
+                    <td>
+                        <button class="action-btn danger" data-action="delete" data-user="${u.accountNumber}">Delete</button>
+                        <button class="action-btn" data-action="${isFrozen ? 'unfreeze' : 'freeze'}" data-user="${u.accountNumber}">${isFrozen ? 'Unfreeze' : 'Freeze'}</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        // Action handlers
+        tbody.querySelectorAll('button[data-action]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const action = btn.dataset.action;
+                const account = btn.dataset.user;
+                if (action === 'delete') return this.deleteUser(account);
+                if (action === 'freeze') return this.setUserFreeze(account, true);
+                if (action === 'unfreeze') return this.setUserFreeze(account, false);
+            });
+        });
+        this.showNotification('User management data loaded');
+    }
+
+    loadAccountManagement() {
+        const select = document.getElementById('account-user-select');
+        const refreshBtn = document.getElementById('refresh-accounts');
+        if (!select) return;
+
+        const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+        select.innerHTML = users.map(u => `<option value="${u.accountNumber}">${u.name} (${u.accountNumber})</option>`).join('');
+
+        const render = () => {
+            const acct = select.value;
+            const user = users.find(u => u.accountNumber === acct);
+            const details = document.getElementById('am-user-details');
+            if (!user || !details) return;
+            const balanceKey = `userBalance_${user.accountNumber}`;
+            const bal = parseFloat(localStorage.getItem(balanceKey) || '0');
+            details.querySelector('[data-field="name"]').textContent = user.name;
+            details.querySelector('[data-field="email"]').textContent = user.email;
+            details.querySelector('[data-field="accountNumber"]').textContent = user.accountNumber;
+            details.querySelector('[data-field="status"]').textContent = user.status || 'active';
+            details.querySelector('[data-field="accountType"]').textContent = user.accountType || 'checking';
+            details.querySelector('[data-field="phone"]').textContent = user.phone || '';
+            details.querySelector('[data-field="balance"]').textContent = `$${bal.toFixed(2)}`;
+
+            // Prefill edit fields
+            const typeSel = document.getElementById('am-account-type');
+            const phoneIn = document.getElementById('am-phone');
+            if (typeSel) typeSel.value = (user.accountType || 'checking');
+            if (phoneIn) phoneIn.value = user.phone || '';
+
+            // Adjust freeze toggle label
+            const freezeBtn = document.getElementById('am-freeze-toggle');
+            if (freezeBtn) freezeBtn.innerHTML = `<i class="fas fa-snowflake"></i> ${user.status === 'frozen' ? 'Unfreeze' : 'Freeze'} Account`;
+        };
+
+        select.onchange = render;
+        if (refreshBtn) refreshBtn.onclick = () => this.loadAccountManagement();
+        render();
+
+        // Wire actions
+        const action = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = fn; };
+        action('am-reset-password', () => {
+            const acct = select.value; const pwd = prompt('Enter a temporary password:'); if (!pwd) return;
+            const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            const i = users.findIndex(u => u.accountNumber === acct); if (i === -1) return;
+            users[i].password = pwd; localStorage.setItem('bankingUsers', JSON.stringify(users));
+            this.showSuccess('Password reset successfully');
+            this.logAudit('password_reset', { accountNumber: acct, userEmail: users[i].email, userName: users[i].name });
+        });
+        action('am-reset-pin', () => {
+            const acct = select.value; const pin = prompt('Enter a 4-digit PIN:', '1234'); if (!pin) return;
+            const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            const i = users.findIndex(u => u.accountNumber === acct); if (i === -1) return;
+                users[i].pin = pin; users[i].pinSetByUser = false; localStorage.setItem('bankingUsers', JSON.stringify(users));
+            this.showSuccess('PIN reset successfully');
+            this.logAudit('pin_reset', { accountNumber: acct, userEmail: users[i].email, userName: users[i].name });
+        });
+        action('am-unlock', () => {
+            const acct = select.value; const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            const i = users.findIndex(u => u.accountNumber === acct); if (i === -1) return;
+            users[i].status = 'active'; localStorage.setItem('bankingUsers', JSON.stringify(users));
+            this.showSuccess('Account unlocked'); render();
+            this.logAudit('user_unlocked', { accountNumber: acct, userEmail: users[i].email, userName: users[i].name });
+        });
+        action('am-freeze-toggle', () => {
+            const acct = select.value; const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            const i = users.findIndex(u => u.accountNumber === acct); if (i === -1) return;
+            users[i].status = users[i].status === 'frozen' ? 'active' : 'frozen';
+            localStorage.setItem('bankingUsers', JSON.stringify(users));
+            this.showSuccess(users[i].status === 'frozen' ? 'Account frozen' : 'Account unfrozen'); render();
+            this.logAudit(users[i].status === 'frozen' ? 'user_frozen' : 'user_unfrozen', { accountNumber: acct, userEmail: users[i].email, userName: users[i].name });
+        });
+        action('am-force-logout', () => {
+            // Clear any session belonging to this user
+            const acct = select.value; const sessionStr = localStorage.getItem('bankingAppSession') || sessionStorage.getItem('bankingAppSession');
+            if (sessionStr) {
+                try {
+                    const store = localStorage.getItem('bankingAppSession') ? 'localStorage' : 'sessionStorage';
+                    const session = JSON.parse(sessionStr);
+                    if (session.user && (session.user.accountNumber === acct)) {
+                        if (store === 'localStorage') localStorage.removeItem('bankingAppSession'); else sessionStorage.removeItem('bankingAppSession');
+                        this.showSuccess('User forcibly logged out');
+                        const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+                        const u = users.find(x => x.accountNumber === acct);
+                        if (u) this.logAudit('user_forced_logout', { accountNumber: acct, userEmail: u.email, userName: u.name });
+                    } else {
+                        this.showNotification('No active session for this user');
+                    }
+                } catch {}
+            } else {
+                this.showNotification('No active session found');
+            }
+        });
+        action('am-save-updates', () => {
+            const acct = select.value; const typeSel = document.getElementById('am-account-type'); const phoneIn = document.getElementById('am-phone');
+            const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            const i = users.findIndex(u => u.accountNumber === acct); if (i === -1) return;
+            users[i].accountType = typeSel.value; users[i].phone = phoneIn.value; localStorage.setItem('bankingUsers', JSON.stringify(users));
+            this.showSuccess('Account details updated'); render();
+            this.logAudit('user_profile_updated', { accountNumber: acct, userEmail: users[i].email, userName: users[i].name }, { accountType: users[i].accountType, phone: users[i].phone });
+        });
+        this.showNotification('Account management loaded');
+    }
+
+    loadAdminTransactions() {
+        const refreshBtn = document.getElementById('refresh-transactions');
+        if (refreshBtn) refreshBtn.onclick = () => this.loadAdminTransactions();
+
+        const list = document.getElementById('admin-pending-transactions-list');
+        const countEl = document.getElementById('admin-pending-count');
+        if (!list) return;
+        const renderLocal = () => {
+            const pending = JSON.parse(localStorage.getItem('pendingTransactions') || '[]');
+            const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            countEl && (countEl.textContent = pending.length);
+            if (!pending.length) {
+                list.innerHTML = `
+                    <div class="empty-pending">
+                        <i class="fas fa-check-circle"></i>
+                        <h4>No pending transactions</h4>
+                        <p>New requests will appear here for review.</p>
+                    </div>`;
+                return;
+            }
+            list.innerHTML = pending.map(t => {
+                const u = users.find(x => x.accountNumber === t.accountNumber || x.email === t.userEmail);
+                const status = u ? (u.status || 'active') : 'active';
+                const blocked = status !== 'active';
+                return `
+                <div class="pending-item ${t.type} ${blocked ? 'user-' + status : ''}" data-id="${t.id}" data-source="local">
+                    <div class="pending-user-info">
+                        <div class="user-avatar ${blocked ? 'status-' + status : ''}">${(t.userName||'?').split(' ').map(n=>n[0]).join('')}</div>
+                        <div class="user-details">
+                            <h5>${t.userName || 'Unknown User'} ${blocked ? `<span class="user-status-badge ${status}">${status.toUpperCase()}</span>` : ''}</h5>
+                            <p class="user-account">Acct: ${t.accountNumber || 'N/A'}</p>
+                            <p class="user-email">${t.userEmail || ''}</p>
+                        </div>
+                    </div>
+                    <div class="pending-transaction-details">
+                        <div class="pending-header">
+                            <span class="pending-type ${t.type}">${t.type.toUpperCase()}${t.subType ? ' • ' + t.subType : ''}</span>
+                            <span class="pending-amount">$${Number(t.amount).toFixed(2)}</span>
+                        </div>
+                        <div class="pending-description">${t.description || ''}</div>
+                        <div class="pending-meta">
+                            <small><i class="fas fa-clock"></i> ${new Date(t.timestamp).toLocaleString()}</small>
+                        </div>
+                    </div>
+                    <div class="pending-actions">
+                        <button class="approve-btn" data-action="approve" ${blocked ? 'disabled title="Cannot approve - user '+status+'"' : ''}><i class="fas fa-check"></i> Approve</button>
+                        <button class="reject-btn" data-action="reject"><i class="fas fa-times"></i> Decline</button>
+                    </div>
+                </div>`;
+            }).join('');
+            wireButtons();
+        };
+
+        const renderApi = (rows) => {
+            const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            countEl && (countEl.textContent = rows.length);
+            if (!rows.length) {
+                list.innerHTML = `
+                    <div class="empty-pending">
+                        <i class="fas fa-check-circle"></i>
+                        <h4>No pending transactions</h4>
+                        <p>New requests will appear here for review.</p>
+                    </div>`;
+                return;
+            }
+            list.innerHTML = rows.map(t => {
+                const u = users.find(x => x.accountNumber === t.accountNumber || x.email === t.userEmail);
+                const status = u ? (u.status || 'active') : 'active';
+                const blocked = status !== 'active';
+                const initials = (t.userName||t.userEmail||'U').toString().trim().split(' ').map(n=>n[0]).slice(0,2).join('');
+                return `
+                <div class="pending-item ${t.type} ${blocked ? 'user-' + status : ''}" data-id="${t._id}" data-source="api">
+                    <div class="pending-user-info">
+                        <div class="user-avatar ${blocked ? 'status-' + status : ''}">${initials}</div>
+                        <div class="user-details">
+                            <h5>${t.userName || 'User'} ${blocked ? `<span class=\"user-status-badge ${status}\">${status.toUpperCase()}</span>` : ''}</h5>
+                            <p class="user-account">Acct: ${t.accountNumber || 'N/A'}</p>
+                            <p class="user-email">${t.userEmail || ''}</p>
+                        </div>
+                    </div>
+                    <div class="pending-transaction-details">
+                        <div class="pending-header">
+                            <span class="pending-type ${t.type}">${String(t.type||'').toUpperCase()}${t.subType ? ' • ' + t.subType : ''}</span>
+                            <span class="pending-amount">$${Number(t.amount).toFixed(2)}</span>
+                        </div>
+                        <div class="pending-description">${t.description || ''}</div>
+                        <div class="pending-meta">
+                            <small><i class="fas fa-clock"></i> ${new Date(t.createdAt || Date.now()).toLocaleString()}</small>
+                        </div>
+                    </div>
+                    <div class="pending-actions">
+                        <button class="approve-btn" data-action="approve" ${blocked ? 'disabled title="Cannot approve - user '+status+'"' : ''}><i class="fas fa-check"></i> Approve</button>
+                        <button class="reject-btn" data-action="reject"><i class="fas fa-times"></i> Decline</button>
+                    </div>
+                </div>`;
+            }).join('');
+            wireButtons();
+        };
+
+        const wireButtons = () => {
+            list.querySelectorAll('button[data-action]').forEach(btn => {
+                btn.onclick = () => {
+                    const item = btn.closest('.pending-item');
+                    const id = item.getAttribute('data-id');
+                    const source = item.getAttribute('data-source') || 'local';
+                    if (btn.dataset.action === 'approve') return this.adminApproveTransaction(id, source);
+                    if (btn.dataset.action === 'reject') return this.adminRejectTransaction(id, source);
+                };
+            });
+        };
+
+        if (this.apiBase) {
+            fetch(`${this.apiBase}/api/transactions/pending`).then(r => r.ok ? r.json() : null).then(rows => {
+                if (Array.isArray(rows)) { renderApi(rows); this.showNotification('Pending transactions loaded'); return; }
+                renderLocal(); this.showNotification('Loaded local pending transactions');
+            }).catch(() => { renderLocal(); this.showNotification('Loaded local pending transactions'); });
+        } else {
+            renderLocal(); this.showNotification('Loaded local pending transactions');
+        }
+    }
+
+    adminApproveTransaction(transactionId, source = 'local') {
+        if (source === 'api' && this.apiBase) {
+            fetch(`${this.apiBase}/api/transactions/${transactionId}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                .then(r => { if (!r.ok) throw new Error('Approve failed'); return r.json(); })
+                .then(() => {
+                    this.showSuccess('Transaction approved');
+                    this.loadAdminTransactions();
+                    this.loadRecentTransactions();
+                })
+                .catch(() => {
+                    this.showError('Backend approve failed');
+                });
+            return;
+        }
+        const pending = JSON.parse(localStorage.getItem('pendingTransactions') || '[]');
+        const approved = JSON.parse(localStorage.getItem('approvedTransactions') || '[]');
+        const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+        const idx = pending.findIndex(t => String(t.id) === String(transactionId));
+        if (idx === -1) return;
+        const tx = pending[idx];
+
+        // Update per-user balance and history
+        const user = users.find(u => u.accountNumber === tx.accountNumber || u.email === tx.userEmail);
+        const acct = user ? user.accountNumber : tx.accountNumber;
+        const balKey = `userBalance_${acct}`;
+        const txKey = `userTransactions_${acct}`;
+        let bal = parseFloat(localStorage.getItem(balKey) || '0');
+        const history = JSON.parse(localStorage.getItem(txKey) || '[]');
+
+        tx.status = 'approved';
+        tx.approvedAt = new Date().toISOString();
+
+    if (tx.type === 'deposit') bal += Number(tx.amount);
+    if (tx.type === 'transfer' || tx.type === 'billpay') bal -= Number(tx.amount);
+
+        // Reflect in user history if exists
+        const hIdx = history.findIndex(h => String(h.id) === String(tx.id));
+        if (hIdx !== -1) {
+            history[hIdx].status = 'approved';
+            history[hIdx].approvedAt = tx.approvedAt;
+        }
+
+    localStorage.setItem(balKey, String(bal));
+        localStorage.setItem(txKey, JSON.stringify(history));
+
+        // Move to approved store and remove from pending
+        approved.push(tx);
+        pending.splice(idx, 1);
+        localStorage.setItem('approvedTransactions', JSON.stringify(approved));
+        localStorage.setItem('pendingTransactions', JSON.stringify(pending));
+
+    this.showSuccess('Transaction approved');
+    this.logAudit('transaction_approved', { transactionId: tx.id, accountNumber: acct, userEmail: tx.userEmail }, { type: tx.type, amount: Number(tx.amount), description: tx.description });
+        this.loadAdminTransactions();
+    // Refresh dashboard recent list if currently visible
+    this.loadRecentTransactions();
+
+        // Try to update client UI counters if admin overlay present
+        try {
+            if (window.bankingApp) {
+                window.bankingApp.updateAdminDashboard();
+                // Push in-app notification to the user, if active in this browser
+                if (String(window.bankingApp.currentUser?.accountNumber) === String(acct)) {
+                    window.bankingApp.addNotification({
+                        title: 'Transaction Approved',
+                        message: `${String(tx.type).toUpperCase()} ${tx.subType ? '('+tx.subType+') ' : ''}for $${Number(tx.amount).toFixed(2)} approved.`,
+                        type: 'success'
+                    }, true);
+                    // Low balance alert check after deduction
+                    const cfg = window.bankingApp.loadAlertsConfig();
+                    if (cfg.types.lowBalance && bal <= cfg.types.lowBalanceThreshold) {
+                        window.bankingApp.addNotification({ title: 'Low Balance', message: `Your balance is $${Number(bal).toFixed(2)}.`, type: 'warning' }, true);
+                    }
+                    // Large transaction info (already occurred)
+                    if (!isNaN(Number(tx.amount)) && cfg.types.largeTransaction && Number(tx.amount) >= Number(cfg.types.largeTransactionThreshold)) {
+                        window.bankingApp.addNotification({ title: 'Large Transaction', message: `A transaction of $${Number(tx.amount).toFixed(2)} was processed.`, type: 'info' }, true);
+                    }
+                    // Refresh client balance display
+                    window.bankingApp.currentBalance = bal;
+                    window.bankingApp.updateBalanceDisplay();
+                    // Update client-side limits usage
+                    window.bankingApp.updateAccountLimitsOnApproval(tx);
+                }
+            }
+        } catch {}
+    }
+
+    adminRejectTransaction(transactionId, source = 'local') {
+        if (source === 'api' && this.apiBase) {
+            const reason = prompt('Enter reason for declining this transaction:') || '';
+            fetch(`${this.apiBase}/api/transactions/${transactionId}/reject`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) })
+                .then(r => { if (!r.ok) throw new Error('Reject failed'); return r.json(); })
+                .then(() => {
+                    this.showNotification('Transaction declined', 'error');
+                    this.loadAdminTransactions();
+                    this.loadRecentTransactions();
+                })
+                .catch(() => this.showError('Backend decline failed'));
+            return;
+        }
+        const reason = prompt('Enter reason for declining this transaction:');
+        if (reason === null) return; // cancelled
+        const pending = JSON.parse(localStorage.getItem('pendingTransactions') || '[]');
+        const idx = pending.findIndex(t => String(t.id) === String(transactionId));
+        if (idx === -1) return;
+        const tx = pending[idx];
+
+        // Update user history with declined + reason
+        const acct = tx.accountNumber;
+        const txKey = `userTransactions_${acct}`;
+        const history = JSON.parse(localStorage.getItem(txKey) || '[]');
+        const hIdx = history.findIndex(h => String(h.id) === String(tx.id));
+        if (hIdx !== -1) {
+            history[hIdx].status = 'declined';
+            history[hIdx].declinedAt = new Date().toISOString();
+            history[hIdx].declineReason = reason || '';
+        }
+        localStorage.setItem(txKey, JSON.stringify(history));
+
+        // Remove from pending only
+        pending.splice(idx, 1);
+        localStorage.setItem('pendingTransactions', JSON.stringify(pending));
+
+    this.showNotification('Transaction declined', 'error');
+    this.logAudit('transaction_declined', { transactionId: tx.id, accountNumber: tx.accountNumber, userEmail: tx.userEmail }, { type: tx.type, amount: Number(tx.amount), description: tx.description, reason });
+        this.loadAdminTransactions();
+    this.loadRecentTransactions();
+        try {
+            if (window.bankingApp) {
+                window.bankingApp.updateAdminDashboard();
+                const acct = tx.accountNumber;
+                if (String(window.bankingApp.currentUser?.accountNumber) === String(acct)) {
+                    window.bankingApp.addNotification({
+                        title: 'Transaction Declined',
+                        message: `${String(tx.type).toUpperCase()} ${tx.subType ? '('+tx.subType+') ' : ''}for $${Number(tx.amount).toFixed(2)} was declined.${tx.description ? ' '+tx.description : ''}`,
+                        type: 'error'
+                    }, true);
+                }
+            }
+        } catch {}
+    }
+
+    loadReports() {
+        const tbody = document.getElementById('reports-table-body');
+        const filterSel = document.getElementById('rep-filter-type');
+        const searchIn = document.getElementById('rep-search');
+        const refreshBtn = document.getElementById('refresh-reports');
+        const exportBtn = document.getElementById('export-reports');
+
+        const renderLocal = () => {
+            const logs = this.getAuditStore();
+            const now = new Date();
+            const within = (days) => (ts) => ((now - new Date(ts)) <= days * 86400000);
+
+            // Metrics
+            const last24 = logs.filter(l => within(1)(l.timestamp));
+            const last7 = logs.filter(l => within(7)(l.timestamp));
+            const approvals24 = last24.filter(l => l.eventType === 'transaction_approved').length;
+            const declines24 = last24.filter(l => l.eventType === 'transaction_declined').length;
+            const deleted7 = last7.filter(l => l.eventType === 'user_deleted').length;
+            const frozen7 = last7.filter(l => l.eventType === 'user_frozen').length;
+            const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+            setText('rep-approvals-24h', approvals24);
+            setText('rep-declines-24h', declines24);
+            setText('rep-deleted-users-7d', deleted7);
+            setText('rep-frozen-7d', frozen7);
+
+            // Filters
+            const type = filterSel ? filterSel.value : 'all';
+            const q = (searchIn ? searchIn.value : '').trim().toLowerCase();
+            let rows = logs;
+            if (type !== 'all') rows = rows.filter(l => l.eventType === type);
+            if (q) rows = rows.filter(l => JSON.stringify(l).toLowerCase().includes(q));
+
+            // Render table
+            if (!tbody) return;
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No events</td></tr>';
+            } else {
+                tbody.innerHTML = rows.map(l => {
+                    const target = l.target || {};
+                    const meta = l.meta || {};
+                    return `
+                        <tr>
+                            <td>${new Date(l.timestamp).toLocaleString()}</td>
+                            <td>${l.eventType.replace(/_/g,' ')}</td>
+                            <td>${l.admin ? `${l.admin.name} (${l.admin.email})` : '-'}</td>
+                            <td>${target.userName || target.accountNumber || target.userEmail || target.transactionId || '-'}</td>
+                            <td>${meta.reason || meta.description || meta.type || '-'}</td>
+                        </tr>`;
+                }).join('');
+            }
+        };
+
+        const renderApi = (apiLogs) => {
+            const now = new Date();
+            const within = (days) => (ts) => ((now - new Date(ts)) <= days * 86400000);
+            const last24 = apiLogs.filter(l => within(1)(l.timestamp));
+            const last7 = apiLogs.filter(l => within(7)(l.timestamp));
+            const approvals24 = last24.filter(l => l.eventType === 'transaction_approved').length;
+            const declines24 = last24.filter(l => l.eventType === 'transaction_declined').length;
+            const deleted7 = last7.filter(l => l.eventType === 'user_deleted').length;
+            const frozen7 = last7.filter(l => l.eventType === 'user_frozen').length;
+            const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+            setText('rep-approvals-24h', approvals24);
+            setText('rep-declines-24h', declines24);
+            setText('rep-deleted-users-7d', deleted7);
+            setText('rep-frozen-7d', frozen7);
+            const filterSelVal = filterSel ? filterSel.value : 'all';
+            const q = (searchIn ? searchIn.value : '').trim().toLowerCase();
+            let rows = apiLogs;
+            if (filterSelVal !== 'all') rows = rows.filter(l => l.eventType === filterSelVal);
+            if (q) rows = rows.filter(l => JSON.stringify(l).toLowerCase().includes(q));
+            if (!tbody) return;
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No events</td></tr>';
+            } else {
+                tbody.innerHTML = rows.map(l => {
+                    const target = { userName: l.userName, accountNumber: l.accountNumber, userEmail: l.userEmail, transactionId: l.txId };
+                    const meta = { reason: l.reason, description: l.description, type: l.type };
+                    return `
+                        <tr>
+                            <td>${new Date(l.timestamp).toLocaleString()}</td>
+                            <td>${l.eventType.replace(/_/g,' ')}</td>
+                            <td>${l.admin ? `${l.admin.name} (${l.admin.email})` : '-'}</td>
+                            <td>${target.userName || target.accountNumber || target.userEmail || target.transactionId || '-'}</td>
+                            <td>${meta.reason || meta.description || meta.type || '-'}</td>
+                        </tr>`;
+                }).join('');
+            }
+        };
+
+        const render = () => {
+            renderLocal();
+            if (this.apiBase) {
+                fetch(`${this.apiBase}/api/audit`).then(r => r.ok ? r.json() : null).then(apiLogs => {
+                    if (Array.isArray(apiLogs)) renderApi(apiLogs);
+                }).catch(()=>{});
+            }
+        };
+
+        if (filterSel) filterSel.onchange = render;
+        if (searchIn) searchIn.oninput = () => { clearTimeout(this._repTimer); this._repTimer = setTimeout(render, 200); };
+        if (refreshBtn) refreshBtn.onclick = render;
+        if (exportBtn) exportBtn.onclick = () => {
+            const logs = this.getAuditStore();
+            const csvHead = ['id','eventType','timestamp','adminName','adminEmail','target','meta'];
+            const csvRows = logs.map(l => [
+                l.id,
+                l.eventType,
+                l.timestamp,
+                (l.admin && l.admin.name) || '',
+                (l.admin && l.admin.email) || '',
+                JSON.stringify(l.target || {}),
+                JSON.stringify(l.meta || {})
+            ].map(v => '"' + String(v).replace(/"/g,'""') + '"').join(','));
+            const csv = [csvHead.join(','), ...csvRows].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `audit-logs-${new Date().toISOString().slice(0,10)}.csv`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            this.showSuccess('Reports exported');
+        };
+
+        render();
+        this.showNotification('Reports loaded');
+    }
+
+    loadSecuritySettings() {
+        const getSec = () => {
+            try { return JSON.parse(localStorage.getItem('securitySettings') || '{}'); } catch { return {}; }
+        };
+        const setSec = (obj) => localStorage.setItem('securitySettings', JSON.stringify(obj));
+
+        const settings = Object.assign({ sessionTimeoutMins: 60, lockoutThreshold: 5, lockoutMinutes: 30, requireMfa: false }, getSec());
+        const timeoutIn = document.getElementById('sec-session-timeout');
+        const thresholdIn = document.getElementById('sec-lockout-threshold');
+        const lockoutMinsIn = document.getElementById('sec-lockout-minutes');
+        const mfaChk = document.getElementById('sec-require-mfa');
+        const saveBtn = document.getElementById('sec-save-settings');
+        const refreshBtn = document.getElementById('refresh-security');
+        const adminEmailIn = document.getElementById('sec-admin-email');
+        const adminPwdIn = document.getElementById('sec-admin-password');
+        const adminUpdateBtn = document.getElementById('sec-update-admin');
+        const activeSessionsDiv = document.getElementById('sec-active-sessions');
+        const forceAllBtn = document.getElementById('sec-force-logout-all');
+        const failedSummary = document.getElementById('sec-failed-summary');
+        const clearFailedBtn = document.getElementById('sec-clear-failed');
+
+        // Populate form
+        if (timeoutIn) timeoutIn.value = settings.sessionTimeoutMins;
+        if (thresholdIn) thresholdIn.value = settings.lockoutThreshold;
+        if (lockoutMinsIn) lockoutMinsIn.value = settings.lockoutMinutes;
+        if (mfaChk) mfaChk.checked = !!settings.requireMfa;
+
+        // Render sessions
+        const renderSessions = () => {
+            const sLocal = localStorage.getItem('bankingAppSession');
+            const sSession = sessionStorage.getItem('bankingAppSession');
+            const sessions = [];
+            if (sLocal) { try { sessions.push({ store: 'localStorage', ...JSON.parse(sLocal) }); } catch {} }
+            if (sSession) { try { sessions.push({ store: 'sessionStorage', ...JSON.parse(sSession) }); } catch {} }
+            if (!activeSessionsDiv) return;
+            if (!sessions.length) { activeSessionsDiv.textContent = 'No active sessions'; return; }
+            activeSessionsDiv.innerHTML = sessions.map(s => `
+                <p><strong>${s.user.role}</strong>: ${s.user.name || s.user.email} <small>(${s.store})</small><br>
+                <small>Login: ${new Date(s.loginTime).toLocaleString()}</small></p>`).join('');
+        };
+
+        // Render failed attempts
+        const getFailed = () => { try { return JSON.parse(localStorage.getItem('failedLoginAttempts') || '{}'); } catch { return {}; } };
+        const renderFailed = () => {
+            const f = getFailed();
+            const total = Object.values(f).reduce((a,b)=>a+Number(b||0),0);
+            failedSummary.textContent = `Tracked by email. Total attempts: ${total}`;
+        };
+
+        renderSessions();
+        renderFailed();
+
+        // Save settings
+        if (saveBtn) saveBtn.onclick = () => {
+            const newSettings = {
+                sessionTimeoutMins: Math.max(5, parseInt(timeoutIn.value || '60', 10)),
+                lockoutThreshold: Math.max(1, parseInt(thresholdIn.value || '5', 10)),
+                lockoutMinutes: Math.max(1, parseInt(lockoutMinsIn.value || '30', 10)),
+                requireMfa: !!mfaChk.checked
+            };
+            setSec(newSettings);
+            this.showSuccess('Security settings saved');
+            this.logAudit('security_settings_updated', {}, newSettings);
+        };
+
+        if (refreshBtn) refreshBtn.onclick = () => this.loadSecuritySettings();
+
+        // Update admin credentials used by auth
+        const adminConfigKey = 'adminCredentials';
+        const getAdminCreds = () => { try { return JSON.parse(localStorage.getItem(adminConfigKey) || '{}'); } catch { return {}; } };
+        const creds = Object.assign({ email: 'bank@gmail.com' }, getAdminCreds());
+        if (adminEmailIn) adminEmailIn.value = creds.email || 'bank@gmail.com';
+        if (adminPwdIn) adminPwdIn.value = '';
+        if (adminUpdateBtn) adminUpdateBtn.onclick = () => {
+            const email = (adminEmailIn.value || '').trim();
+            const pwd = (adminPwdIn.value || '').trim();
+            if (!email) return this.showError('Admin email is required');
+            const next = { email };
+            if (pwd) next.password = pwd;
+            localStorage.setItem(adminConfigKey, JSON.stringify(next));
+            this.showSuccess('Admin credentials updated');
+            this.logAudit('admin_credentials_updated', {}, { emailChanged: true, passwordChanged: !!pwd });
+        };
+
+        // Force logout all
+        if (forceAllBtn) forceAllBtn.onclick = () => {
+            localStorage.removeItem('bankingAppSession');
+            sessionStorage.removeItem('bankingAppSession');
+            this.showSuccess('All sessions cleared');
+            this.logAudit('all_sessions_cleared');
+            renderSessions();
+        };
+
+        // Clear failed attempts
+        if (clearFailedBtn) clearFailedBtn.onclick = () => {
+            localStorage.removeItem('failedLoginAttempts');
+            this.showSuccess('Failed attempts cleared');
+            this.logAudit('failed_attempts_cleared');
+            renderFailed();
+        };
+
+        this.showNotification('Security settings loaded');
+    }
+
+    loadSystemSettings() {
+        const getSettings = () => { try { return JSON.parse(localStorage.getItem('appSettings') || '{}'); } catch { return {}; } };
+        const setSettings = (obj) => localStorage.setItem('appSettings', JSON.stringify(obj));
+
+        const defaults = {
+            appName: 'SecureBank',
+            primaryColor: '#667eea',
+            logoUrl: '',
+            supportEmail: 'customerservice0549@gmail.com',
+            supportPhone: '+18545537663752',
+            maintenanceMode: false,
+            maintenanceMessage: 'We are performing scheduled maintenance.'
+        };
+        const s = Object.assign({}, defaults, getSettings());
+
+        const q = (id) => document.getElementById(id);
+        const refreshBtn = q('refresh-settings');
+        const saveBtn = q('save-settings');
+        const appName = q('set-app-name');
+        const color = q('set-primary-color');
+        const logo = q('set-logo-url');
+        const supEmail = q('set-support-email');
+        const supPhone = q('set-support-phone');
+        const maint = q('set-maintenance-mode');
+        const maintMsg = q('set-maintenance-message');
+        const expUsers = q('set-export-users');
+        const expAudit = q('set-export-audit');
+        const clearPending = q('set-clear-pending');
+
+        if (appName) appName.value = s.appName;
+        if (color) color.value = s.primaryColor;
+        if (logo) logo.value = s.logoUrl;
+        if (supEmail) supEmail.value = s.supportEmail;
+        if (supPhone) supPhone.value = s.supportPhone;
+        if (maint) maint.checked = !!s.maintenanceMode;
+        if (maintMsg) maintMsg.value = s.maintenanceMessage;
+
+        const renderBranding = () => {
+            // Update header title if present
+            const adminHeader = document.querySelector('.admin-logo h1');
+            if (adminHeader) adminHeader.textContent = s.appName + ' Admin';
+            // Apply primary color to CSS variables if available
+            document.documentElement.style.setProperty('--primary-color', s.primaryColor);
+        };
+        renderBranding();
+
+        const save = () => {
+            const next = {
+                appName: appName.value || defaults.appName,
+                primaryColor: color.value || defaults.primaryColor,
+                logoUrl: logo.value || '',
+                supportEmail: supEmail.value || defaults.supportEmail,
+                supportPhone: supPhone.value || defaults.supportPhone,
+                maintenanceMode: !!maint.checked,
+                maintenanceMessage: maintMsg.value || defaults.maintenanceMessage
+            };
+            setSettings(next);
+            this.showSuccess('Settings saved');
+            this.logAudit('system_settings_saved', {}, next);
+        };
+
+        if (saveBtn) saveBtn.onclick = () => { save(); };
+        if (refreshBtn) refreshBtn.onclick = () => this.loadSystemSettings();
+        if (expUsers) expUsers.onclick = () => {
+            const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            const csvHead = ['name','email','accountNumber','status','accountType','phone'];
+            const rows = users.map(u => [u.name,u.email,u.accountNumber,u.status||'active',u.accountType||'',u.phone||'']
+                .map(v=> '"'+String(v).replace(/"/g,'""')+'"').join(','));
+            const csv = [csvHead.join(','), ...rows].join('\n');
+            const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'users.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            this.showSuccess('Users exported'); this.logAudit('export_users');
+        };
+        if (expAudit) expAudit.onclick = () => {
+            const logs = JSON.parse(localStorage.getItem('auditLogs') || '[]');
+            const csvHead = ['id','eventType','timestamp','adminName','adminEmail','target','meta'];
+            const rows = logs.map(l => [l.id,l.eventType,l.timestamp,(l.admin&&l.admin.name)||'',(l.admin&&l.admin.email)||'',JSON.stringify(l.target||{}),JSON.stringify(l.meta||{})]
+                .map(v=> '"'+String(v).replace(/"/g,'""')+'"').join(','));
+            const csv = [csvHead.join(','), ...rows].join('\n');
+            const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'audit-logs.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            this.showSuccess('Audit logs exported'); this.logAudit('export_audit');
+        };
+        if (clearPending) clearPending.onclick = () => {
+            if (!confirm('Clear ALL pending transactions?')) return;
+            localStorage.setItem('pendingTransactions', JSON.stringify([]));
+            this.showSuccess('Pending transactions cleared');
+            this.logAudit('pending_transactions_cleared');
+        };
+
+        this.showNotification('System settings loaded');
+    }
+
+    // Handle Actions
+    handleWidgetAction(widgetTitle) {
+        console.log(`Widget action clicked for: ${widgetTitle}`);
+        
+        switch (widgetTitle) {
+            case 'Recent Transactions':
+                this.switchSection('transactions', 
+                    document.querySelectorAll('.nav-link'),
+                    document.querySelectorAll('.admin-section')
+                );
+                break;
+            case 'System Status':
+                this.refreshSystemStatus();
+                break;
+        }
+    }
+
+    handleUserAction(action, userName) {
+        // Legacy handler not used anymore; table uses explicit buttons
+    }
+
+    confirmUserAction(action, userName) {
+        // not used by new Users table
+    }
+
+    deleteUser(accountNumber) {
+        if (!confirm('Delete this user permanently? This cannot be undone.')) return;
+        let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+        const idx = users.findIndex(u => u.accountNumber === accountNumber);
+        if (idx === -1) return this.showError('User not found');
+        const user = users[idx];
+        users.splice(idx, 1);
+        localStorage.setItem('bankingUsers', JSON.stringify(users));
+        // Clean up per-user data
+        localStorage.removeItem(`userTransactions_${accountNumber}`);
+        localStorage.removeItem(`userBalance_${accountNumber}`);
+        this.showSuccess(`Deleted ${user.name}'s account`);
+        this.logAudit('user_deleted', { accountNumber: accountNumber, userEmail: user.email, userName: user.name });
+        this.loadUserManagement();
+        this.updateStats();
+    }
+
+    setUserFreeze(accountNumber, freeze) {
+        let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+        const idx = users.findIndex(u => u.accountNumber === accountNumber);
+        if (idx === -1) return this.showError('User not found');
+        users[idx].status = freeze ? 'frozen' : 'active';
+        localStorage.setItem('bankingUsers', JSON.stringify(users));
+        this.showSuccess(`${freeze ? 'Frozen' : 'Unfrozen'} ${users[idx].name}'s account`);
+        this.logAudit(freeze ? 'user_frozen' : 'user_unfrozen', { accountNumber, userEmail: users[idx].email, userName: users[idx].name });
+        this.loadUserManagement();
+        this.updateStats();
+    }
+
+    exportData() {
+        this.showNotification('Preparing data export...');
+        
+        // Simulate export process
+        setTimeout(() => {
+            this.showNotification('Data export completed!', 'success');
+        }, 2000);
+    }
+
+    addNewItem() {
+        const sectionTitle = document.querySelector('.section-header h2').textContent;
+        this.showNotification(`Add new ${sectionTitle.toLowerCase()} feature coming soon!`);
+    }
+
+    refreshSystemStatus() {
+        this.showNotification('Refreshing system status...');
+        setTimeout(() => {
+            this.updateSystemStatus();
+            this.showNotification('System status updated', 'success');
+        }, 1000);
+    }
+
+    // Admin-specific actions
+    showNotifications() {
+        const notifications = [
+            'System backup completed successfully',
+            'New user registration: John Smith',
+            'Suspicious transaction detected and flagged'
+        ];
+        
+        this.showNotification('Notifications: ' + notifications.length + ' new items');
+    }
+
+    showProfile() {
+        this.showNotification(`Profile: ${this.currentUser.name} (${this.currentUser.email})`);
+    }
+
+    logout() {
+        const confirmed = confirm('Are you sure you want to logout?');
+        if (confirmed) {
+            // Clear session
+            localStorage.removeItem('bankingAppSession');
+            sessionStorage.removeItem('bankingAppSession');
+            
+            this.showNotification('Logging out...', 'success');
+            
+            setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 1000);
+        }
+    }
+
+    // Real-time Updates
+    setupRealTimeUpdates() {
+        // Update stats every 30 seconds
+        setInterval(() => {
+            if (this.currentSection === 'dashboard') {
+                this.updateStats();
+            }
+        }, 30000);
+
+        // Update system status every 60 seconds
+        setInterval(() => {
+            this.updateSystemStatus();
+        }, 60000);
+
+        // Refresh recent transaction view every 2 minutes
+        setInterval(() => {
+            if (this.currentSection === 'dashboard') {
+                this.loadRecentTransactions();
+            }
+        }, 120000);
+    }
+
+    addNewTransaction() { this.loadRecentTransactions(); }
+
+    // Utility Methods
+    showNotification(message, type = 'info') {
+        // Remove existing notifications
+        const existingNotifications = document.querySelectorAll('.admin-notification');
+        existingNotifications.forEach(notification => notification.remove());
+
+        // Create notification
+        const notification = document.createElement('div');
+        notification.className = `admin-notification ${type}`;
+        notification.textContent = message;
+
+        // Style the notification
+        Object.assign(notification.style, {
+            position: 'fixed',
+            top: '90px',
+            right: '20px',
+            padding: '12px 20px',
+            borderRadius: '8px',
+            color: 'white',
+            fontSize: '14px',
+            zIndex: '10000',
+            maxWidth: '350px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+            transform: 'translateX(400px)',
+            transition: 'transform 0.3s ease'
+        });
+
+        // Set background color based on type
+        switch (type) {
+            case 'success':
+                notification.style.background = '#28a745';
+                break;
+            case 'error':
+                notification.style.background = '#dc3545';
+                break;
+            default:
+                notification.style.background = '#667eea';
+        }
+
+        document.body.appendChild(notification);
+
+        // Animate in
+        setTimeout(() => {
+            notification.style.transform = 'translateX(0)';
+        }, 100);
+
+        // Remove after 3 seconds
+        setTimeout(() => {
+            notification.style.transform = 'translateX(400px)';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 3000);
+    }
+
+    showError(message) {
+        this.showNotification(message, 'error');
+    }
+
+    showSuccess(message) {
+        this.showNotification(message, 'success');
+    }
+
+    // Show All Users Modal
+    showAllUsersModal() {
+        // Get user data
+        let users = [];
+        try {
+            const storedUsers = localStorage.getItem('bankingUsers');
+            if (storedUsers) {
+                users = JSON.parse(storedUsers);
+            }
+        } catch (error) {
+            console.error('Error loading user data:', error);
+        }
+
+        // Create modal HTML
+        const modalHTML = `
+            <div class="all-users-modal" id="allUsersModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-users"></i> All Users (${users.length})</h3>
+                        <button class="close-modal" onclick="closeAllUsersModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="users-grid">
+                            ${users.map(user => this.createUserCard(user)).join('')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Add modal to DOM
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Add event listeners for user cards
+        this.setupUserCardListeners();
+    }
+
+    createUserCard(user) {
+        const statusClass = user.status || 'active';
+        const statusIcon = statusClass === 'active' ? '✓' : statusClass === 'blocked' ? '✗' : '❄';
+        const avatarClass = statusClass === 'blocked' ? 'blocked' : statusClass === 'frozen' ? 'frozen' : '';
+        const key = `userBalance_${user.accountNumber || user.id}`;
+        const stored = parseFloat(localStorage.getItem(key));
+        const fallback = parseFloat((user.balance || '').toString().replace(/[$,]/g, '')) || 0;
+        const displayBalance = Number.isFinite(stored) ? stored : fallback;
+        
+        return `
+            <div class="user-card" data-user-id="${user.accountNumber}">
+                <div class="user-avatar ${avatarClass}">
+                    ${user.name.split(' ').map(n => n[0]).join('')}
+                    <div class="status-indicator ${statusClass}">${statusIcon}</div>
+                </div>
+                <div class="user-info">
+                    <h4>${user.name}</h4>
+                    <p><i class="fas fa-envelope"></i> ${user.email}</p>
+                    <p><i class="fas fa-credit-card"></i> ${user.accountNumber}</p>
+                    <p><i class="fas fa-dollar-sign"></i> $${displayBalance.toFixed(2)}</p>
+                </div>
+                <div class="user-status-info">
+                    <span class="status-badge ${statusClass}">${statusClass}</span>
+                    <span class="last-login">Last: 2 hours ago</span>
+                </div>
+            </div>
+        `;
+    }
+
+    setupUserCardListeners() {
+        const userCards = document.querySelectorAll('.user-card');
+        userCards.forEach(card => {
+            card.addEventListener('click', () => {
+                const userId = card.dataset.userId;
+                this.showUserDetails(userId);
+            });
+        });
+    }
+
+    showUserDetails(userId) {
+        // Get user data
+        let users = [];
+        try {
+            const storedUsers = localStorage.getItem('bankingUsers');
+            if (storedUsers) {
+                users = JSON.parse(storedUsers);
+            }
+        } catch (error) {
+            // ignore
+        }
+
+    const user = users.find(u => u.accountNumber === userId);
+        if (!user) return;
+
+        // Use the existing showUserDetails function from script.js if available
+        if (typeof showUserDetails === 'function') {
+            showUserDetails(user);
+        } else {
+            // Fallback: create a simple user details modal
+            this.showSimpleUserDetails(user);
+        }
+    }
+
+    showSimpleUserDetails(user) {
+        const key = `userBalance_${user.accountNumber || user.id}`;
+        const stored = parseFloat(localStorage.getItem(key));
+        const fallback = parseFloat((user.balance || '').toString().replace(/[$,]/g, '')) || 0;
+        const displayBalance = Number.isFinite(stored) ? stored : fallback;
+        const modalHTML = `
+            <div class="user-details-modal" id="userDetailsModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div class="user-avatar-large">${user.name.split(' ').map(n => n[0]).join('')}</div>
+                        <div class="user-title-info">
+                            <h2>${user.name}</h2>
+                            <span class="user-status ${user.status || 'active'}">${user.status || 'active'}</span>
+                        </div>
+                        <button class="close-modal" onclick="closeUserDetailsModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="user-info-grid">
+                            <div class="info-section">
+                                <h3><i class="fas fa-user"></i> Personal Information</h3>
+                                <div class="info-row">
+                                    <label>Full Name:</label>
+                                    <span>${user.name}</span>
+                                </div>
+                                <div class="info-row">
+                                    <label>Email:</label>
+                                    <span>${user.email}</span>
+                                </div>
+                                <div class="info-row">
+                                    <label>Account Number:</label>
+                                    <span>${user.accountNumber}</span>
+                                </div>
+                                <div class="info-row">
+                                    <label>Balance:</label>
+                                    <span>$${displayBalance.toFixed(2)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    }
+
+    // Show Pending Users Modal
+    showPendingUsersModal() {
+        // Get pending user data
+        let pendingUsers = [];
+        try {
+            const storedPendingUsers = localStorage.getItem('pendingUsers');
+            if (storedPendingUsers) {
+                pendingUsers = JSON.parse(storedPendingUsers);
+            }
+        } catch (error) {
+            console.error('Error loading pending user data:', error);
+        }
+
+        // Create modal HTML
+        const modalHTML = `
+            <div class="pending-users-modal" id="pendingUsersModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-user-clock"></i> Pending Users (${pendingUsers.length})</h3>
+                        <button class="close-modal" onclick="closePendingUsersModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        ${pendingUsers.length === 0 ? 
+                            '<div class="no-pending-users"><i class="fas fa-check-circle"></i><p>No pending user registrations</p></div>' :
+                            '<div class="pending-users-grid">' + pendingUsers.map(user => this.createPendingUserCard(user)).join('') + '</div>'
+                        }
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Add modal to DOM
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Add event listeners for approval/rejection
+        this.setupPendingUserActions();
+    }
+
+    createPendingUserCard(user) {
+        const requestDate = new Date(user.requestDate).toLocaleDateString();
+        
+        return `
+            <div class="pending-user-card" data-user-id="${user.accountNumber}">
+                <div class="pending-user-header">
+                    <div class="user-avatar pending">
+                        ${user.name.split(' ').map(n => n[0]).join('')}
+                        <div class="status-indicator pending">⏳</div>
+                    </div>
+                    <div class="user-basic-info">
+                        <h4>${user.name}</h4>
+                        <p><i class="fas fa-envelope"></i> ${user.email}</p>
+                        <p><i class="fas fa-phone"></i> ${user.phone}</p>
+                        <p><i class="fas fa-credit-card"></i> ${user.accountNumber}</p>
+                    </div>
+                </div>
+                <div class="pending-user-details">
+                    <div class="detail-row">
+                        <label>Initial Balance:</label>
+                        <span>${user.balance}</span>
+                    </div>
+                    <div class="detail-row">
+                        <label>PIN:</label>
+                        <span>${user.pin}</span>
+                    </div>
+                    <div class="detail-row">
+                        <label>Request Date:</label>
+                        <span>${requestDate}</span>
+                    </div>
+                </div>
+                <div class="pending-user-actions">
+                    <button class="action-btn approve" onclick="approveUser('${user.accountNumber}')">
+                        <i class="fas fa-check"></i> Approve
+                    </button>
+                    <button class="action-btn reject" onclick="rejectUser('${user.accountNumber}')">
+                        <i class="fas fa-times"></i> Reject
+                    </button>
+                    <button class="action-btn view-details" onclick="viewPendingUserDetails('${user.accountNumber}')">
+                        <i class="fas fa-eye"></i> View Details
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    setupPendingUserActions() {
+        // Make functions globally available
+        window.approveUser = (accountNumber) => this.approveUser(accountNumber);
+        window.rejectUser = (accountNumber) => this.rejectUser(accountNumber);
+        window.viewPendingUserDetails = (accountNumber) => this.viewPendingUserDetails(accountNumber);
+        window.closePendingUsersModal = () => this.closePendingUsersModal();
+    }
+
+    approveUser(accountNumber) {
+        try {
+            // Get pending users
+            let pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
+            const userIndex = pendingUsers.findIndex(user => user.accountNumber === accountNumber);
+            
+            if (userIndex === -1) {
+                this.showError('User not found');
+                return;
+            }
+
+            const approvedUser = pendingUsers[userIndex];
+            
+            // Remove from pending users
+            pendingUsers.splice(userIndex, 1);
+            localStorage.setItem('pendingUsers', JSON.stringify(pendingUsers));
+
+            // Add to approved users (convert to approved format)
+            const newApprovedUser = {
+                name: approvedUser.name,
+                email: approvedUser.email,
+                password: approvedUser.password,
+                phone: approvedUser.phone,
+                accountNumber: approvedUser.accountNumber,
+                balance: approvedUser.balance || '$0.00',
+                status: 'active',
+                role: 'user',
+                pin: approvedUser.pin,
+                pinSetByUser: !!approvedUser.pinSetByUser,
+                securityQuestions: approvedUser.securityQuestions,
+                lastLogin: new Date().toISOString(),
+                joinDate: new Date().toISOString(),
+                routingNumber: (function(){
+                    const gen = () => {
+                        let s=''; for (let i=0;i<9;i++) s+=Math.floor(Math.random()*10); if (s[0]==='0') s='1'+s.slice(1); return s;
+                    };
+                    try {
+                        const existing = JSON.parse(localStorage.getItem('bankingUsers')||'[]').map(u=>String(u.routingNumber||''));
+                        let r = gen(); const set = new Set(existing);
+                        while (set.has(r)) r = gen();
+                        return r;
+                    } catch { return gen(); }
+                })()
+            };
+
+            // Add to banking users
+            let bankingUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            bankingUsers.push(newApprovedUser);
+            localStorage.setItem('bankingUsers', JSON.stringify(bankingUsers));
+
+            this.showSuccess(`User ${approvedUser.name} has been approved and can now access their account.`);
+            
+            // Refresh the modal and stats
+            this.closePendingUsersModal();
+            this.updateStats();
+            
+        } catch (error) {
+            console.error('Error approving user:', error);
+            this.showError('Failed to approve user. Please try again.');
+        }
+    }
+
+    rejectUser(accountNumber) {
+        if (!confirm('Are you sure you want to reject this user registration? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            // Get pending users
+            let pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
+            const userIndex = pendingUsers.findIndex(user => user.accountNumber === accountNumber);
+            
+            if (userIndex === -1) {
+                this.showError('User not found');
+                return;
+            }
+
+            const rejectedUser = pendingUsers[userIndex];
+            
+            // Remove from pending users
+            pendingUsers.splice(userIndex, 1);
+            localStorage.setItem('pendingUsers', JSON.stringify(pendingUsers));
+
+            this.showSuccess(`User registration for ${rejectedUser.name} has been rejected.`);
+            
+            // Refresh the modal and stats
+            this.closePendingUsersModal();
+            this.updateStats();
+            
+        } catch (error) {
+            console.error('Error rejecting user:', error);
+            this.showError('Failed to reject user. Please try again.');
+        }
+    }
+
+    viewPendingUserDetails(accountNumber) {
+        try {
+            const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
+            const user = pendingUsers.find(u => u.accountNumber === accountNumber);
+            
+            if (!user) {
+                this.showError('User not found');
+                return;
+            }
+
+            this.showPendingUserDetailsModal(user);
+            
+        } catch (error) {
+            console.error('Error viewing user details:', error);
+            this.showError('Failed to load user details.');
+        }
+    }
+
+    showPendingUserDetailsModal(user) {
+        const modalHTML = `
+            <div class="pending-user-details-modal" id="pendingUserDetailsModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div class="user-avatar-large pending">${user.name.split(' ').map(n => n[0]).join('')}</div>
+                        <div class="user-title-info">
+                            <h2>${user.name}</h2>
+                            <span class="user-status pending">Pending Approval</span>
+                        </div>
+                        <button class="close-modal" onclick="closePendingUserDetailsModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="user-info-grid">
+                            <div class="info-section">
+                                <h3><i class="fas fa-user"></i> Personal Information</h3>
+                                <div class="info-row">
+                                    <label>Full Name:</label>
+                                    <span>${user.name}</span>
+                                </div>
+                                <div class="info-row">
+                                    <label>Email:</label>
+                                    <span>${user.email}</span>
+                                </div>
+                                <div class="info-row">
+                                    <label>Phone:</label>
+                                    <span>${user.phone}</span>
+                                </div>
+                                <div class="info-row">
+                                    <label>Request Date:</label>
+                                    <span>${new Date(user.requestDate).toLocaleString()}</span>
+                                </div>
+                            </div>
+                            <div class="info-section">
+                                <h3><i class="fas fa-university"></i> Account Information</h3>
+                                <div class="info-row">
+                                    <label>Account Number:</label>
+                                    <span>${user.accountNumber}</span>
+                                </div>
+                                <div class="info-row">
+                                    <label>Initial Balance:</label>
+                                    <span>${user.balance}</span>
+                                </div>
+                                <div class="info-row">
+                                    <label>PIN:</label>
+                                    <span>${user.pin}</span>
+                                </div>
+                                <div class="info-row">
+                                    <label>Status:</label>
+                                    <span>Pending Approval</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <div class="action-buttons">
+                            <button class="action-btn approve" onclick="approveUser('${user.accountNumber}'); closePendingUserDetailsModal();">
+                                <i class="fas fa-check"></i> Approve User
+                            </button>
+                            <button class="action-btn reject" onclick="rejectUser('${user.accountNumber}'); closePendingUserDetailsModal();">
+                                <i class="fas fa-times"></i> Reject User
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Make close function available
+        window.closePendingUserDetailsModal = () => {
+            const modal = document.getElementById('pendingUserDetailsModal');
+            if (modal) {
+                modal.remove();
+            }
+        };
+    }
+
+    closePendingUsersModal() {
+        const modal = document.getElementById('pendingUsersModal');
+        if (modal) {
+            modal.remove();
+        }
+    }
+}
+
+// Global logout function for the admin dashboard
+function logout() {
+    const admin = window.adminDashboard;
+    if (admin) {
+        admin.logout();
+    } else {
+        // Fallback logout
+        localStorage.removeItem('bankingAppSession');
+        sessionStorage.removeItem('bankingAppSession');
+        window.location.href = 'index.html';
+    }
+}
+
+// Global function to close All Users modal
+function closeAllUsersModal() {
+    const modal = document.getElementById('allUsersModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Global function to close User Details modal
+function closeUserDetailsModal() {
+    const modal = document.getElementById('userDetailsModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Initialize admin dashboard when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('Admin Dashboard Initializing...');
+    
+    const adminDashboard = new AdminDashboard();
+    
+    // Make it globally accessible
+    window.adminDashboard = adminDashboard;
+    
+    console.log('Admin Dashboard Initialized Successfully!');
+});
+
+// Export for use in other modules
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = AdminDashboard;
+}
