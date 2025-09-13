@@ -30,6 +30,11 @@ const asyncH = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).c
 // Health
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
+// Friendly root message
+app.get('/', (req, res) => {
+  res.type('text/plain').send('SecureBank API running. See /api/health');
+});
+
 // Users
 app.get('/api/users', asyncH(async (req, res) => {
   const users = await db.collection('users').find({}).project({ password: 0 }).toArray();
