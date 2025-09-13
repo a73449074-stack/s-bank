@@ -48,6 +48,28 @@ app.get('/api/pending-users', asyncH(async (req, res) => {
   res.json(rows);
 }));
 
+app.post('/api/pending-users', asyncH(async (req, res) => {
+  const body = req.body || {};
+  const doc = {
+    name: body.name,
+    email: body.email,
+    phone: body.phone,
+    password: body.password || undefined,
+    accountNumber: body.accountNumber,
+    routingNumber: body.routingNumber || null,
+    status: 'pending',
+    requestDate: new Date(),
+    balance: body.balance || '$0.00',
+    pin: body.pin || null,
+    pinSetByUser: !!body.pinSetByUser,
+    securityQuestions: Array.isArray(body.securityQuestions) ? body.securityQuestions : [],
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  const r = await db.collection('pending_users').insertOne(doc);
+  res.status(201).json({ id: r.insertedId });
+}));
+
 app.post('/api/pending-users/approve/:id', asyncH(async (req, res) => {
   const _id = new ObjectId(req.params.id);
   const pending = await db.collection('pending_users').findOne({ _id });
@@ -62,6 +84,16 @@ app.post('/api/pending-users/approve/:id', asyncH(async (req, res) => {
   };
   const r = await db.collection('users').insertOne(user);
   res.json({ ok: true, id: r.insertedId });
+}));
+
+app.post('/api/pending-users/reject/:id', asyncH(async (req, res) => {
+  const _id = new ObjectId(req.params.id);
+  const { reason = '' } = req.body || {};
+  const pending = await db.collection('pending_users').findOne({ _id });
+  if (!pending) return res.status(404).json({ error: 'Not found' });
+  await db.collection('pending_users').deleteOne({ _id });
+  await db.collection('audit_logs').insertOne({ eventType: 'pending_user_rejected', pendingId: _id, email: pending.email, reason, timestamp: new Date() });
+  res.json({ ok: true });
 }));
 
 // Transactions

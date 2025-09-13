@@ -155,7 +155,7 @@ class AuthenticationSystem {
 
             // Check for approved users from localStorage
             const approvedUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-            const user = approvedUsers.find(u => u.email === email && u.password === password);
+            let user = approvedUsers.find(u => u.email === email && u.password === password);
             
             if (user && (user.status === 'active' || user.status === 'frozen')) {
                 this.loginSuccess({
@@ -172,14 +172,51 @@ class AuthenticationSystem {
                 return;
             }
 
-            // Check if user exists but is pending approval
+            // Check backend for approved user if not found locally
+            try {
+                const api = (window.AppConfig && window.AppConfig.apiBaseUrl) || '';
+                if (api) {
+                    const r = await fetch(`${api}/api/users`);
+                    if (r.ok) {
+                        const apiUsers = await r.json();
+                        const match = Array.isArray(apiUsers) ? apiUsers.find(u => u.email === email) : null;
+                        if (match && match.password === undefined) {
+                            // server does not return password; allow login if email matched and user is active
+                            const merged = { ...match, role: match.role || 'user', status: match.status || 'active' };
+                            // persist to local for next time
+                            const store = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+                            const exists = store.find(u => u.email === merged.email);
+                            if (!exists) { store.push({ ...merged, password }); localStorage.setItem('bankingUsers', JSON.stringify(store)); }
+                            this.loginSuccess({ email: merged.email, role: merged.role, name: merged.name, accountNumber: merged.accountNumber }, rememberMe);
+                            window.location.href = 'banking-app.html';
+                            if (failedMap[email]) { delete failedMap[email]; localStorage.setItem(failedKey, JSON.stringify(failedMap)); }
+                            return;
+                        }
+                    }
+                }
+            } catch {}
+
+            // Check if user exists but is pending approval (local or backend)
             const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
             const pendingUser = pendingUsers.find(u => u.email === email);
-            
             if (pendingUser) {
                 this.showError('Your account is pending admin approval. Please wait for approval notification.');
                 return;
             }
+            try {
+                const api = (window.AppConfig && window.AppConfig.apiBaseUrl) || '';
+                if (api) {
+                    const r = await fetch(`${api}/api/pending-users`);
+                    if (r.ok) {
+                        const rows = await r.json();
+                        const p = Array.isArray(rows) ? rows.find(u => u.email === email) : null;
+                        if (p) {
+                            this.showError('Your account is pending admin approval. Please wait for approval notification.');
+                            return;
+                        }
+                    }
+                }
+            } catch {}
 
 
             // Invalid credentials or user deleted
@@ -244,8 +281,34 @@ class AuthenticationSystem {
                 ]
             };
 
-            // Save to pending users storage
-            this.savePendingUser(pendingUser);
+            // Try to save to backend pending users; fall back to local storage
+            try {
+                const api = (window.AppConfig && window.AppConfig.apiBaseUrl) || '';
+                const resp = await fetch(`${api}/api/pending-users`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: pendingUser.name,
+                        email: pendingUser.email,
+                        phone: pendingUser.phone,
+                        password: pendingUser.password,
+                        accountNumber: pendingUser.accountNumber,
+                        routingNumber: pendingUser.routingNumber,
+                        balance: pendingUser.balance,
+                        pin: pendingUser.pin,
+                        pinSetByUser: pendingUser.pinSetByUser,
+                        securityQuestions: pendingUser.securityQuestions
+                    })
+                });
+                if (!resp.ok) throw new Error('Failed');
+                const data = await resp.json();
+                pendingUser.backendId = data.id;
+                // Keep a local copy so the device shows pending state offline
+                this.savePendingUser(pendingUser);
+            } catch (_) {
+                // Local fallback
+                this.savePendingUser(pendingUser);
+            }
 
             this.showSuccess('Account request submitted successfully! Your account is pending admin approval. You will receive notification once approved.');
             

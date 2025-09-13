@@ -319,7 +319,7 @@ class AdminDashboard {
             console.error('Error loading user data:', error);
         }
 
-        // Calculate real stats
+    // Calculate real stats
         const activeUsers = users.filter(user => user.status === 'active');
         const totalBalance = users.reduce((sum, user) => {
             const key = `userBalance_${user.accountNumber || user.id}`;
@@ -346,7 +346,7 @@ class AdminDashboard {
     this.animateStatUpdate('.stat-card:nth-child(5) h3', stats.todayTransactions.toLocaleString());
     // Pending Transactions card is the 6th card now
     this.animateStatUpdate('.stat-card:nth-child(6) h3', stats.pendingTx.toLocaleString());
-        // Try to overlay with backend values if API available
+    // Try to overlay with backend values if API available
         if (this.apiBase) {
             // Users
             fetch(`${this.apiBase}/api/users`).then(r => r.ok ? r.json() : null).then(apiUsers => {
@@ -362,6 +362,12 @@ class AdminDashboard {
             fetch(`${this.apiBase}/api/transactions/pending`).then(r => r.ok ? r.json() : null).then(rows => {
                 if (Array.isArray(rows)) {
                     this.animateStatUpdate('.stat-card:nth-child(6) h3', rows.length.toLocaleString());
+                }
+            }).catch(()=>{});
+            // Pending users
+            fetch(`${this.apiBase}/api/pending-users`).then(r => r.ok ? r.json() : null).then(rows => {
+                if (Array.isArray(rows)) {
+                    this.animateStatUpdate('.stat-card:nth-child(2) h3', rows.length.toLocaleString());
                 }
             }).catch(()=>{});
         }
@@ -1596,40 +1602,45 @@ class AdminDashboard {
     }
 
     // Show Pending Users Modal
-    showPendingUsersModal() {
-        // Get pending user data
+    async showPendingUsersModal() {
         let pendingUsers = [];
-        try {
-            const storedPendingUsers = localStorage.getItem('pendingUsers');
-            if (storedPendingUsers) {
-                pendingUsers = JSON.parse(storedPendingUsers);
+        // Prefer backend if available
+        if (this.apiBase) {
+            try {
+                const r = await fetch(`${this.apiBase}/api/pending-users`);
+                if (r.ok) pendingUsers = await r.json();
+            } catch (_) { /* ignore and fallback */ }
+        }
+        // Fallback to local storage
+        if (!Array.isArray(pendingUsers) || pendingUsers.length === 0) {
+            try {
+                const storedPendingUsers = localStorage.getItem('pendingUsers');
+                if (storedPendingUsers) pendingUsers = JSON.parse(storedPendingUsers);
+            } catch (error) {
+                console.error('Error loading pending user data:', error);
             }
-        } catch (error) {
-            console.error('Error loading pending user data:', error);
         }
 
-        // Create modal HTML
+        this._modalPendingUsers = Array.isArray(pendingUsers) ? pendingUsers : [];
+
         const modalHTML = `
             <div class="pending-users-modal" id="pendingUsersModal">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h3><i class="fas fa-user-clock"></i> Pending Users (${pendingUsers.length})</h3>
+                        <h3><i class="fas fa-user-clock"></i> Pending Users (${this._modalPendingUsers.length})</h3>
                         <button class="close-modal" onclick="closePendingUsersModal()">&times;</button>
                     </div>
                     <div class="modal-body">
-                        ${pendingUsers.length === 0 ? 
+                        ${this._modalPendingUsers.length === 0 ? 
                             '<div class="no-pending-users"><i class="fas fa-check-circle"></i><p>No pending user registrations</p></div>' :
-                            '<div class="pending-users-grid">' + pendingUsers.map(user => this.createPendingUserCard(user)).join('') + '</div>'
+                            '<div class="pending-users-grid">' + this._modalPendingUsers.map(user => this.createPendingUserCard(user)).join('') + '</div>'
                         }
                     </div>
                 </div>
             </div>
         `;
 
-        // Add modal to DOM
         document.body.insertAdjacentHTML('beforeend', modalHTML);
-        
-        // Add event listeners for approval/rejection
         this.setupPendingUserActions();
     }
 
@@ -1637,7 +1648,7 @@ class AdminDashboard {
         const requestDate = new Date(user.requestDate).toLocaleDateString();
         
         return `
-            <div class="pending-user-card" data-user-id="${user.accountNumber}">
+            <div class="pending-user-card" data-user-id="${user.accountNumber}" data-backend-id="${user._id || user.backendId || ''}">
                 <div class="pending-user-header">
                     <div class="user-avatar pending">
                         ${user.name.split(' ').map(n => n[0]).join('')}
@@ -1665,13 +1676,13 @@ class AdminDashboard {
                     </div>
                 </div>
                 <div class="pending-user-actions">
-                    <button class="action-btn approve" onclick="approveUser('${user.accountNumber}')">
+                    <button class="action-btn approve" onclick="approveUser('${user._id || user.backendId || ''}','${user.accountNumber}')">
                         <i class="fas fa-check"></i> Approve
                     </button>
-                    <button class="action-btn reject" onclick="rejectUser('${user.accountNumber}')">
+                    <button class="action-btn reject" onclick="rejectUser('${user._id || user.backendId || ''}','${user.accountNumber}')">
                         <i class="fas fa-times"></i> Reject
                     </button>
-                    <button class="action-btn view-details" onclick="viewPendingUserDetails('${user.accountNumber}')">
+                    <button class="action-btn view-details" onclick="viewPendingUserDetails('${user.accountNumber}','${user._id || user.backendId || ''}')">
                         <i class="fas fa-eye"></i> View Details
                     </button>
                 </div>
@@ -1681,13 +1692,25 @@ class AdminDashboard {
 
     setupPendingUserActions() {
         // Make functions globally available
-        window.approveUser = (accountNumber) => this.approveUser(accountNumber);
-        window.rejectUser = (accountNumber) => this.rejectUser(accountNumber);
-        window.viewPendingUserDetails = (accountNumber) => this.viewPendingUserDetails(accountNumber);
+        window.approveUser = (backendId, accountNumber) => this.approveUser(backendId, accountNumber);
+        window.rejectUser = (backendId, accountNumber) => this.rejectUser(backendId, accountNumber);
+        window.viewPendingUserDetails = (accountNumber, backendId) => this.viewPendingUserDetails(accountNumber, backendId);
         window.closePendingUsersModal = () => this.closePendingUsersModal();
     }
 
-    approveUser(accountNumber) {
+    async approveUser(backendId, accountNumber) {
+        // If backend id is present and API is available, prefer server approval
+        if (backendId && this.apiBase) {
+            try {
+                const r = await fetch(`${this.apiBase}/api/pending-users/approve/${backendId}`, { method: 'POST' });
+                if (r.ok) {
+                    this.showSuccess('User approved successfully.');
+                    this.closePendingUsersModal();
+                    this.updateStats();
+                    return;
+                }
+            } catch (_) { /* fall through to local */ }
+        }
         try {
             // Get pending users
             let pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
@@ -1749,11 +1772,21 @@ class AdminDashboard {
         }
     }
 
-    rejectUser(accountNumber) {
+    async rejectUser(backendId, accountNumber) {
         if (!confirm('Are you sure you want to reject this user registration? This action cannot be undone.')) {
             return;
         }
-
+        if (backendId && this.apiBase) {
+            try {
+                const r = await fetch(`${this.apiBase}/api/pending-users/reject/${backendId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'Rejected by admin' }) });
+                if (r.ok) {
+                    this.showSuccess('User registration rejected.');
+                    this.closePendingUsersModal();
+                    this.updateStats();
+                    return;
+                }
+            } catch (_) { /* fallback to local */ }
+        }
         try {
             // Get pending users
             let pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
@@ -1782,10 +1815,16 @@ class AdminDashboard {
         }
     }
 
-    viewPendingUserDetails(accountNumber) {
+    viewPendingUserDetails(accountNumber, backendId) {
         try {
-            const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
-            const user = pendingUsers.find(u => u.accountNumber === accountNumber);
+            let user = null;
+            if (Array.isArray(this._modalPendingUsers)) {
+                user = this._modalPendingUsers.find(u => (u.accountNumber === accountNumber) || (backendId && (u._id === backendId || u.backendId === backendId)));
+            }
+            if (!user) {
+                const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
+                user = pendingUsers.find(u => u.accountNumber === accountNumber);
+            }
             
             if (!user) {
                 this.showError('User not found');
