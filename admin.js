@@ -534,54 +534,88 @@ class AdminDashboard {
         }
     }
 
-    loadUserManagement() {
+    async loadUserManagement() {
         const tbody = document.getElementById('users-table-body');
         if (!tbody) return;
-        let users = [];
-        try {
-            users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-        } catch {}
-        // Only verified/approved users (status present)
-        const verified = users.filter(u => (u.status || 'active') !== 'pending');
-        tbody.innerHTML = verified.map(u => {
-            const initials = u.name.split(' ').map(n => n[0]).join('');
-            const status = u.status || 'active';
-            const balanceKey = `userBalance_${u.accountNumber || u.id}`;
-            const numeric = parseFloat(localStorage.getItem(balanceKey));
-            const fallback = parseFloat((u.balance || '').toString().replace(/[$,]/g, '')) || 0;
-            const displayBal = Number.isFinite(numeric) ? numeric : fallback;
-            const isFrozen = status === 'frozen';
-            return `
-                <tr data-user="${u.accountNumber}">
-                    <td>
-                        <div class="user-cell">
-                            <div class="user-avatar">${initials}</div>
-                            <span>${u.name}</span>
-                        </div>
-                    </td>
-                    <td>${u.email}</td>
-                    <td>${u.accountType || 'Checking'}</td>
-                    <td>$${displayBal.toFixed(2)}</td>
-                    <td><span class="status-badge ${status}">${status.charAt(0).toUpperCase() + status.slice(1)}</span></td>
-                    <td>
-                        <button class="action-btn danger" data-action="delete" data-user="${u.accountNumber}">Delete</button>
-                        <button class="action-btn" data-action="${isFrozen ? 'unfreeze' : 'freeze'}" data-user="${u.accountNumber}">${isFrozen ? 'Unfreeze' : 'Freeze'}</button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
 
-        // Action handlers
-        tbody.querySelectorAll('button[data-action]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const action = btn.dataset.action;
-                const account = btn.dataset.user;
-                if (action === 'delete') return this.deleteUser(account);
-                if (action === 'freeze') return this.setUserFreeze(account, true);
-                if (action === 'unfreeze') return this.setUserFreeze(account, false);
+        const renderRows = (users) => {
+            const verified = users.filter(u => (u.status || 'active') !== 'pending');
+            tbody.innerHTML = verified.map(u => {
+                const initials = (u.name || u.email || 'U').toString().trim().split(' ').map(n => n[0]).slice(0,2).join('');
+                const status = u.status || 'active';
+                const balanceKey = `userBalance_${u.accountNumber || u.id}`;
+                const numeric = parseFloat(localStorage.getItem(balanceKey));
+                const fallback = parseFloat((u.balance || '').toString().replace(/[$,]/g, '')) || 0;
+                const displayBal = Number.isFinite(numeric) ? numeric : fallback;
+                const isFrozen = status === 'frozen';
+                return `
+                    <tr data-user="${u.accountNumber || ''}">
+                        <td>
+                            <div class="user-cell">
+                                <div class="user-avatar">${initials}</div>
+                                <span>${u.name || u.email}</span>
+                            </div>
+                        </td>
+                        <td>${u.email || ''}</td>
+                        <td>${u.accountType || 'Checking'}</td>
+                        <td>$${displayBal.toFixed(2)}</td>
+                        <td><span class="status-badge ${status}">${status.charAt(0).toUpperCase() + status.slice(1)}</span></td>
+                        <td>
+                            <button class="action-btn danger" data-action="delete" data-user="${u.accountNumber}">Delete</button>
+                            <button class="action-btn" data-action="${isFrozen ? 'unfreeze' : 'freeze'}" data-user="${u.accountNumber}">${isFrozen ? 'Unfreeze' : 'Freeze'}</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            // Row click opens details
+            tbody.querySelectorAll('tr[data-user]').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    // ignore clicks on action buttons
+                    if ((e.target instanceof HTMLElement) && e.target.closest('button')) return;
+                    const acct = row.getAttribute('data-user');
+                    if (acct) this.showUserDetails(acct);
+                });
             });
-        });
-        this.showNotification('User management data loaded');
+
+            // Action handlers
+            tbody.querySelectorAll('button[data-action]').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const action = btn.dataset.action;
+                    const account = btn.dataset.user;
+                    if (action === 'delete') return this.deleteUser(account);
+                    if (action === 'freeze') return this.setUserFreeze(account, true);
+                    if (action === 'unfreeze') return this.setUserFreeze(account, false);
+                });
+            });
+        };
+
+        try {
+            if (this.apiBase) {
+                const r = await fetch(`${this.apiBase}/api/users`);
+                if (r.ok) {
+                    const apiUsers = await r.json();
+                    if (Array.isArray(apiUsers)) {
+                        renderRows(apiUsers);
+                        this.showNotification('User management data loaded from server');
+                        return;
+                    }
+                }
+            }
+        } catch {}
+
+        // Fallback to local
+        let users = [];
+        try { users = JSON.parse(localStorage.getItem('bankingUsers') || '[]'); } catch {}
+        renderRows(users);
+        this.showNotification('User management loaded from local data');
+
+        // Wire header buttons
+        const filterBtn = document.getElementById('users-filter');
+        const addBtn = document.getElementById('users-add');
+        if (filterBtn) filterBtn.onclick = () => this.showNotification('Filter coming soon');
+        if (addBtn) addBtn.onclick = () => this.showNotification('Add user coming soon');
     }
 
     loadAccountManagement() {
