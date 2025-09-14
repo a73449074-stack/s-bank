@@ -84,15 +84,11 @@ class AdminDashboard {
     setupNavigation() {
         const navLinks = document.querySelectorAll('.nav-link');
         const sections = document.querySelectorAll('.admin-section');
-        
-        console.log('Setting up navigation. Found navLinks:', navLinks.length, 'sections:', sections.length);
 
         navLinks.forEach(link => {
-            console.log('Setting up nav link:', link.dataset.section);
             link.addEventListener('click', (e) => {
                 e.preventDefault();
                 const targetSection = link.dataset.section;
-                console.log('Nav link clicked:', targetSection);
                 this.switchSection(targetSection, navLinks, sections);
                 // Close sidebar on mobile after navigation
                 const sidebar = document.getElementById('adminSidebar');
@@ -171,17 +167,11 @@ class AdminDashboard {
     }
 
     switchSection(targetSection, navLinks, sections) {
-        console.log('switchSection called with targetSection:', targetSection);
         const current = document.querySelector('.admin-section.active');
         const nextLink = document.querySelector(`[data-section="${targetSection}"]`);
         const nextSection = document.getElementById(targetSection);
         
-        console.log('current section:', current);
-        console.log('nextLink:', nextLink);
-        console.log('nextSection:', nextSection);
-        
         if (!nextLink || !nextSection) {
-            console.error('Could not find nextLink or nextSection for:', targetSection);
             return;
         }
 
@@ -195,7 +185,6 @@ class AdminDashboard {
             // Activate next
             nextSection.classList.add('active');
             this.currentSection = targetSection;
-            console.log('Loading section data for:', targetSection);
             this.loadSectionData(targetSection);
         };
 
