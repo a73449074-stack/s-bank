@@ -167,38 +167,19 @@ class AdminDashboard {
     }
 
     switchSection(targetSection, navLinks, sections) {
-        const current = document.querySelector('.admin-section.active');
         const nextLink = document.querySelector(`[data-section="${targetSection}"]`);
         const nextSection = document.getElementById(targetSection);
-        
-        if (!nextLink || !nextSection) {
-            return;
-        }
+        if (!nextLink || !nextSection) return;
 
         // Update nav active state
         navLinks.forEach(link => link.closest('.nav-item').classList.remove('active'));
         nextLink.closest('.nav-item').classList.add('active');
 
-        const doActivate = () => {
-            // Hide all sections first (except current which will be removed in animation end)
-            sections.forEach(s => { if (s !== current) s.classList.remove('active','leaving'); });
-            // Activate next
-            nextSection.classList.add('active');
-            this.currentSection = targetSection;
-            this.loadSectionData(targetSection);
-        };
-
-        if (current && current !== nextSection) {
-            // Animate leaving
-            current.classList.add('leaving');
-            current.addEventListener('animationend', () => {
-                current.classList.remove('active','leaving');
-            }, { once: true });
-            // Slight delay to allow leave anim to begin before activating next
-            setTimeout(doActivate, 50);
-        } else {
-            doActivate();
-        }
+        // Immediately switch sections without relying on animations
+        sections.forEach(s => s.classList.remove('active', 'leaving'));
+        nextSection.classList.add('active');
+        this.currentSection = targetSection;
+        this.loadSectionData(targetSection);
     }
 
     // Setup Admin Actions
