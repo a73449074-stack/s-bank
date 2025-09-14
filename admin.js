@@ -292,41 +292,100 @@ class AdminDashboard {
         this.updateSystemStatus();
     }
 
-    updateStats() {
-        // Get real user data from localStorage
-        let users = [];
-        let pendingUsers = [];
-        let pendingTxCount = 0;
+    async updateStats() {
         try {
-            const storedUsers = localStorage.getItem('bankingUsers');
-            if (storedUsers) {
-                users = JSON.parse(storedUsers);
+            let users = [];
+            let pendingUsers = [];
+            let pendingTxCount = 0;
+
+            // Try to fetch from backend first
+            if (this.apiBase) {
+                try {
+                    // Fetch approved users from backend
+                    const usersResponse = await fetch(`${this.apiBase}/api/users`);
+                    if (usersResponse.ok) {
+                        const apiUsers = await usersResponse.json();
+                        if (Array.isArray(apiUsers) && apiUsers.length > 0) {
+                            users = apiUsers;
+                        }
+                    }
+
+                    // Fetch pending users from backend
+                    const pendingResponse = await fetch(`${this.apiBase}/api/pending-users`);
+                    if (pendingResponse.ok) {
+                        const apiPendingUsers = await pendingResponse.json();
+                        if (Array.isArray(apiPendingUsers)) {
+                            pendingUsers = apiPendingUsers;
+                        }
+                    }
+                } catch (error) {
+                    console.log('Backend not available, falling back to localStorage:', error.message);
+                }
             }
 
-            // Get pending users
-            const storedPendingUsers = localStorage.getItem('pendingUsers');
-            if (storedPendingUsers) {
-                pendingUsers = JSON.parse(storedPendingUsers);
+            // Fallback to localStorage if backend data is empty or unavailable
+            if (users.length === 0) {
+                const storedUsers = localStorage.getItem('bankingUsers');
+                if (storedUsers) {
+                    users = JSON.parse(storedUsers);
+                }
             }
 
-            // Get pending transactions
+            if (pendingUsers.length === 0) {
+                const storedPendingUsers = localStorage.getItem('pendingUsers');
+                if (storedPendingUsers) {
+                    pendingUsers = JSON.parse(storedPendingUsers);
+                }
+            }
+
+            // Get pending transactions (still from localStorage for now)
             const storedPendingTx = localStorage.getItem('pendingTransactions');
             if (storedPendingTx) {
                 const arr = JSON.parse(storedPendingTx);
                 pendingTxCount = Array.isArray(arr) ? arr.length : 0;
             }
-        } catch (error) {
-            console.error('Error loading user data:', error);
-        }
 
-    // Calculate real stats
-        const activeUsers = users.filter(user => user.status === 'active');
+            // Update the UI with current data
+            this.displayStats(users, pendingUsers, pendingTxCount);
+
+        } catch (error) {
+            console.error('Error updating stats:', error);
+            
+            // Final fallback to localStorage only
+            let users = [];
+            let pendingUsers = [];
+            let pendingTxCount = 0;
+            
+            try {
+                const storedUsers = localStorage.getItem('bankingUsers');
+                if (storedUsers) {
+                    users = JSON.parse(storedUsers);
+                }
+
+                const storedPendingUsers = localStorage.getItem('pendingUsers');
+                if (storedPendingUsers) {
+                    pendingUsers = JSON.parse(storedPendingUsers);
+                }
+
+                const storedPendingTx = localStorage.getItem('pendingTransactions');
+                if (storedPendingTx) {
+                    const arr = JSON.parse(storedPendingTx);
+                    pendingTxCount = Array.isArray(arr) ? arr.length : 0;
+                }
+            } catch (localError) {
+                console.error('Error loading local data:', localError);
+            }
+
+            this.displayStats(users, pendingUsers, pendingTxCount);
+        }
+    }
+
+    displayStats(users, pendingUsers, pendingTxCount) {
+        // Calculate real stats from the provided data
+        const activeUsers = users.filter(user => (user.status || 'active') === 'active');
         const totalBalance = users.reduce((sum, user) => {
-            const key = `userBalance_${user.accountNumber || user.id}`;
-            const stored = parseFloat(localStorage.getItem(key));
-            const fallback = parseFloat((user.balance || '').toString().replace(/[$,]/g, '')) || 0;
-            const value = Number.isFinite(stored) ? stored : fallback;
-            return sum + value;
+            const balance = Number(user.balance) || 0;
+            return sum + balance;
         }, 0);
         
         const stats = {
@@ -343,34 +402,8 @@ class AdminDashboard {
         this.animateStatUpdate('.stat-card:nth-child(2) h3', stats.pendingUsers.toLocaleString());
         this.animateStatUpdate('.stat-card:nth-child(3) h3', stats.activeAccounts.toLocaleString());
         this.animateStatUpdate('.stat-card:nth-child(4) h3', stats.totalBalance);
-    this.animateStatUpdate('.stat-card:nth-child(5) h3', stats.todayTransactions.toLocaleString());
-    // Pending Transactions card is the 6th card now
-    this.animateStatUpdate('.stat-card:nth-child(6) h3', stats.pendingTx.toLocaleString());
-    // Try to overlay with backend values if API available
-        if (this.apiBase) {
-            // Users
-            fetch(`${this.apiBase}/api/users`).then(r => r.ok ? r.json() : null).then(apiUsers => {
-                if (Array.isArray(apiUsers) && apiUsers.length >= 0) {
-                    const active = apiUsers.filter(u => (u.status || 'active') === 'active');
-                    const totalBal = apiUsers.reduce((s,u)=> s + (Number(u.balance||0)), 0);
-                    this.animateStatUpdate('.stat-card:nth-child(1) h3', apiUsers.length.toLocaleString());
-                    this.animateStatUpdate('.stat-card:nth-child(3) h3', active.length.toLocaleString());
-                    this.animateStatUpdate('.stat-card:nth-child(4) h3', '$' + (totalBal / 1000000).toFixed(1) + 'M');
-                }
-            }).catch(()=>{});
-            // Pending transactions
-            fetch(`${this.apiBase}/api/transactions/pending`).then(r => r.ok ? r.json() : null).then(rows => {
-                if (Array.isArray(rows)) {
-                    this.animateStatUpdate('.stat-card:nth-child(6) h3', rows.length.toLocaleString());
-                }
-            }).catch(()=>{});
-            // Pending users
-            fetch(`${this.apiBase}/api/pending-users`).then(r => r.ok ? r.json() : null).then(rows => {
-                if (Array.isArray(rows)) {
-                    this.animateStatUpdate('.stat-card:nth-child(2) h3', rows.length.toLocaleString());
-                }
-            }).catch(()=>{});
-        }
+        this.animateStatUpdate('.stat-card:nth-child(5) h3', stats.todayTransactions.toLocaleString());
+        this.animateStatUpdate('.stat-card:nth-child(6) h3', stats.pendingTx.toLocaleString());
     }
 
     animateStatUpdate(selector, newValue) {
