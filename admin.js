@@ -194,8 +194,8 @@ class AdminDashboard {
 
         // Notification and profile buttons removed from header
 
-        // Total Users card click - show all users
-        const totalUsersCard = document.querySelector('.stat-card:nth-child(1)');
+    // Total Users card click - show all users
+    const totalUsersCard = document.querySelector('.stats-grid .stat-card:nth-child(1)');
         if (totalUsersCard) {
             totalUsersCard.style.cursor = 'pointer';
             totalUsersCard.classList.add('clickable');
@@ -204,8 +204,8 @@ class AdminDashboard {
             });
         }
 
-        // Pending Users card click - show pending users
-        const pendingUsersCard = document.querySelector('.stat-card:nth-child(2)');
+    // Pending Users card click - show pending users
+    const pendingUsersCard = document.querySelector('.stats-grid .stat-card:nth-child(2)');
         if (pendingUsersCard) {
             pendingUsersCard.style.cursor = 'pointer';
             pendingUsersCard.classList.add('clickable');
@@ -381,13 +381,13 @@ class AdminDashboard {
             pendingTx: pendingTxCount
         };
 
-        // Update stat cards with animation
-        this.animateStatUpdate('.stat-card:nth-child(1) h3', stats.totalUsers.toLocaleString());
-        this.animateStatUpdate('.stat-card:nth-child(2) h3', stats.pendingUsers.toLocaleString());
-        this.animateStatUpdate('.stat-card:nth-child(3) h3', stats.activeAccounts.toLocaleString());
-        this.animateStatUpdate('.stat-card:nth-child(4) h3', stats.totalBalance);
-        this.animateStatUpdate('.stat-card:nth-child(5) h3', stats.todayTransactions.toLocaleString());
-        this.animateStatUpdate('.stat-card:nth-child(6) h3', stats.pendingTx.toLocaleString());
+    // Update stat cards with animation (dashboard grid only)
+    this.animateStatUpdate('.stats-grid .stat-card:nth-child(1) h3', stats.totalUsers.toLocaleString());
+    this.animateStatUpdate('.stats-grid .stat-card:nth-child(2) h3', stats.pendingUsers.toLocaleString());
+    this.animateStatUpdate('.stats-grid .stat-card:nth-child(3) h3', stats.activeAccounts.toLocaleString());
+    this.animateStatUpdate('.stats-grid .stat-card:nth-child(4) h3', stats.totalBalance);
+    this.animateStatUpdate('.stats-grid .stat-card:nth-child(5) h3', stats.todayTransactions.toLocaleString());
+    this.animateStatUpdate('.stats-grid .stat-card:nth-child(6) h3', stats.pendingTx.toLocaleString());
     }
 
     animateStatUpdate(selector, newValue) {
@@ -1506,30 +1506,43 @@ class AdminDashboard {
         this.showNotification(message, 'success');
     }
 
-    // Show All Users Modal
-    showAllUsersModal() {
-        // Get user data
+    // Show All Users Modal (backend-first with local fallback)
+    async showAllUsersModal() {
         let users = [];
-        try {
-            const storedUsers = localStorage.getItem('bankingUsers');
-            if (storedUsers) {
-                users = JSON.parse(storedUsers);
-            }
-        } catch (error) {
-            console.error('Error loading user data:', error);
+        // Prefer backend if configured
+        if (this.apiBase) {
+            try {
+                const resp = await fetch(`${this.apiBase}/api/users`);
+                if (resp.ok) {
+                    const apiUsers = await resp.json();
+                    if (Array.isArray(apiUsers)) users = apiUsers;
+                }
+            } catch (_) { /* ignore and fallback */ }
         }
+        // Fallback to local storage
+        if (!Array.isArray(users) || users.length === 0) {
+            try {
+                const storedUsers = localStorage.getItem('bankingUsers');
+                if (storedUsers) users = JSON.parse(storedUsers);
+            } catch (error) {
+                console.error('Error loading user data:', error);
+            }
+        }
+
+        // cache for details lookups
+        this._modalAllUsers = Array.isArray(users) ? users : [];
 
         // Create modal HTML
         const modalHTML = `
             <div class="all-users-modal" id="allUsersModal">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h3><i class="fas fa-users"></i> All Users (${users.length})</h3>
+                        <h3><i class="fas fa-users"></i> All Users (${this._modalAllUsers.length})</h3>
                         <button class="close-modal" onclick="closeAllUsersModal()">&times;</button>
                     </div>
                     <div class="modal-body">
                         <div class="users-grid">
-                            ${users.map(user => this.createUserCard(user)).join('')}
+                            ${this._modalAllUsers.map(user => this.createUserCard(user)).join('')}
                         </div>
                     </div>
                 </div>
@@ -1583,18 +1596,16 @@ class AdminDashboard {
     }
 
     showUserDetails(userId) {
-        // Get user data
-        let users = [];
-        try {
-            const storedUsers = localStorage.getItem('bankingUsers');
-            if (storedUsers) {
-                users = JSON.parse(storedUsers);
-            }
-        } catch (error) {
-            // ignore
+        // Prefer the modal cache if available, else fallback to local storage
+        let users = Array.isArray(this._modalAllUsers) ? this._modalAllUsers : [];
+        if (users.length === 0) {
+            try {
+                const storedUsers = localStorage.getItem('bankingUsers');
+                if (storedUsers) users = JSON.parse(storedUsers);
+            } catch (_) { /* ignore */ }
         }
 
-    const user = users.find(u => u.accountNumber === userId);
+        const user = users.find(u => u.accountNumber === userId);
         if (!user) return;
 
         // Use the existing showUserDetails function from script.js if available
@@ -1946,10 +1957,10 @@ class AdminDashboard {
                     </div>
                     <div class="modal-actions">
                         <div class="action-buttons">
-                            <button class="action-btn approve" onclick="approveUser('${user.accountNumber}'); closePendingUserDetailsModal();">
+                            <button class="action-btn approve" onclick="approveUser('${user._id || user.backendId || ''}','${user.accountNumber}'); closePendingUserDetailsModal();">
                                 <i class="fas fa-check"></i> Approve User
                             </button>
-                            <button class="action-btn reject" onclick="rejectUser('${user.accountNumber}'); closePendingUserDetailsModal();">
+                            <button class="action-btn reject" onclick="rejectUser('${user._id || user.backendId || ''}','${user.accountNumber}'); closePendingUserDetailsModal();">
                                 <i class="fas fa-times"></i> Reject User
                             </button>
                         </div>
