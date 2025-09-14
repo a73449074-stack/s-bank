@@ -13,15 +13,21 @@ app.use(cors({ origin: '*'}));
 app.use(express.json());
 app.use(morgan('dev'));
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/securebank';
+const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/securebank';
+const MONGO_URI_SOURCE = process.env.MONGO_URI ? 'MONGO_URI' : (process.env.MONGODB_URI ? 'MONGODB_URI' : 'DEFAULT_LOCAL');
 const DB_NAME = process.env.DB_NAME || 'securebank';
 let db, client;
 
 async function connectMongo() {
-  client = new MongoClient(MONGO_URI, { serverSelectionTimeoutMS: 15000 });
-  await client.connect();
-  db = client.db(DB_NAME);
-  console.log('Connected to MongoDB');
+  try {
+    client = new MongoClient(MONGO_URI, { serverSelectionTimeoutMS: 20000 });
+    await client.connect();
+    db = client.db(DB_NAME);
+    console.log(`Connected to MongoDB (source=${MONGO_URI_SOURCE}, db=${DB_NAME})`);
+  } catch (err) {
+    console.error(`Mongo connection failed (source=${MONGO_URI_SOURCE}). Ensure the environment variable is set on your host and that your Atlas IP allowlist permits access.`, err.message);
+    throw err;
+  }
 }
 
 // Utility: wrap async routes
