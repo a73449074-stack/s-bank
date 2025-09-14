@@ -746,6 +746,45 @@ body {
     }
 }
 
+/* Enhanced Mobile Responsiveness */
+@media (max-width: 600px) {
+    html, body { overflow-x: hidden; }
+    .admin-main { padding: 12px; }
+    .section-header { gap: 10px; }
+    .section-header h2 { font-size: 20px; }
+    .stats-grid { grid-template-columns: 1fr; gap: 12px; }
+    .stat-card { padding: 16px; gap: 12px; }
+    .stat-icon { width: 44px; height: 44px; font-size: 18px; }
+    .stat-content h3 { font-size: 22px; }
+    .dashboard-grid { grid-template-columns: 1fr; gap: 12px; }
+
+    /* Pending Users Modal and other modals */
+    .pending-users-modal { padding: 10px; }
+    .pending-users-modal .modal-content { max-width: 96vw; width: 100%; border-radius: 10px; }
+    .pending-users-modal .modal-header { padding: 14px 16px; }
+    .pending-users-modal .modal-header h3 { font-size: 1.1rem; }
+    .pending-users-modal .modal-body { padding: 12px; max-height: calc(100vh - 120px); }
+
+    .pending-users-grid { grid-template-columns: 1fr; gap: 12px; }
+    .pending-user-card { padding: 14px; }
+    .pending-user-header { gap: 12px; }
+    .detail-row { flex-direction: column; align-items: flex-start; gap: 4px; }
+    .pending-user-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .action-btn { width: 100%; margin-right: 0; padding: 10px 12px; font-size: 14px; }
+    .action-btn.view-details { grid-column: span 2; }
+
+    /* Other modals common width */
+    .all-users-modal .modal-content,
+    .user-details-modal .modal-content,
+    .pending-user-details-modal .modal-content { max-width: 96vw; width: 100%; }
+}
+
+@media (max-width: 360px) {
+    .stat-content h3 { font-size: 20px; }
+    .admin-btn.primary, .admin-btn.secondary { padding: 10px 12px; }
+    .pending-users-modal .modal-header h3 { font-size: 1rem; }
+}
+
 /* Animations */
 @keyframes fadeIn {
     from {
