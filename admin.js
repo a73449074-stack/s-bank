@@ -143,6 +143,8 @@ class AdminDashboard {
             sidebar.style.transform = '';
             sidebar.style.top = '';
             sidebar.style.height = '';
+            // Force visibility as a safety against CSS conflicts
+            sidebar.style.left = '0';
             sidebar.classList.add('open');
             sidebar.setAttribute('aria-hidden', 'false');
             burger.setAttribute('aria-expanded', 'true');
@@ -179,6 +181,9 @@ class AdminDashboard {
                 }
             }
         });
+
+        // Mark setup complete so fallback won’t attach
+        window.__adminSidebarSetup = true;
     }
 
     switchSection(targetSection, navLinks, sections) {
@@ -2345,6 +2350,47 @@ document.addEventListener('DOMContentLoaded', () => {
     window.adminDashboard = adminDashboard;
     
     console.log('Admin Dashboard Initialized Successfully!');
+
+    // Fallback: if for any reason the primary setup didn't bind,
+    // attach a minimal toggle to the hamburger to ensure usability.
+    try {
+        if (!window.__adminSidebarSetup) {
+            const burger = document.querySelector('.hamburger-btn');
+            const sidebar = document.getElementById('adminSidebar');
+            const backdrop = document.querySelector('.sidebar-backdrop');
+            if (burger && sidebar && backdrop && !burger.dataset.fallbackBound) {
+                burger.dataset.fallbackBound = 'true';
+                burger.addEventListener('click', () => {
+                    const isOpen = sidebar.classList.contains('open');
+                    if (isOpen) {
+                        sidebar.classList.remove('open');
+                        sidebar.setAttribute('aria-hidden', 'true');
+                        burger.setAttribute('aria-expanded', 'false');
+                        backdrop.hidden = true;
+                        document.body.style.overflow = '';
+                        sidebar.style.left = '';
+                    } else {
+                        sidebar.classList.add('open');
+                        sidebar.setAttribute('aria-hidden', 'false');
+                        burger.setAttribute('aria-expanded', 'true');
+                        backdrop.hidden = false;
+                        document.body.style.overflow = 'hidden';
+                        sidebar.style.left = '0';
+                    }
+                });
+                backdrop.addEventListener('click', () => {
+                    sidebar.classList.remove('open');
+                    sidebar.setAttribute('aria-hidden', 'true');
+                    burger.setAttribute('aria-expanded', 'false');
+                    backdrop.hidden = true;
+                    document.body.style.overflow = '';
+                    sidebar.style.left = '';
+                });
+            }
+        }
+    } catch (e) {
+        console.warn('Fallback sidebar setup error:', e);
+    }
 });
 
 // Export for use in other modules
