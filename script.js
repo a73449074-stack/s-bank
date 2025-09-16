@@ -115,6 +115,11 @@ class BankingApp {
 
         // Apply persisted theme on load
         this.applyPersistedTheme();
+
+        // Backend sync to mirror admin decisions and balances
+        this.syncServerState({ silent: true }).catch(()=>{});
+        try { this._syncTimer && clearInterval(this._syncTimer); } catch {}
+        this._syncTimer = setInterval(() => { this.syncServerState({ silent: true }).catch(()=>{}); }, 15000);
     }
 
     updateAccountTitle() {
@@ -213,6 +218,86 @@ class BankingApp {
         this.renderFrozenBanner();
         // Refresh routing balance breakdown
         this.renderBalanceBreakdown();
+    }
+
+    async syncServerState(opts = {}) {
+        try {
+            const api = (window.AppConfig && window.AppConfig.apiBaseUrl) || '';
+            if (!api) return;
+            const acct = this.currentUser.accountNumber;
+            // 1) Pull users list and update balance for this account
+            const usersResp = await fetch(`${api}/api/users`).catch(()=>null);
+            if (usersResp && usersResp.ok) {
+                const users = await usersResp.json();
+                if (Array.isArray(users)) {
+                    const me = users.find(u => String(u.accountNumber) === String(acct) || String(u.email) === String(this.currentUser.email));
+                    if (me && (typeof me.balance === 'number' || typeof me.balance === 'string')) {
+                        const bal = Number(me.balance) || 0;
+                        const balKey = this.getUserBalanceKey();
+                        localStorage.setItem(balKey, String(bal));
+                        this.currentBalance = bal;
+                        this.updateBalanceDisplay();
+                    }
+                    // Keep local bankingUsers in sync for this user
+                    try {
+                        const localUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+                        const idx = localUsers.findIndex(u => String(u.accountNumber) === String(acct) || String(u.email) === String(this.currentUser.email));
+                        if (idx !== -1 && me) {
+                            localUsers[idx].balance = Number(me.balance) || 0;
+                            localUsers[idx].status = me.status || localUsers[idx].status || 'active';
+                            localStorage.setItem('bankingUsers', JSON.stringify(localUsers));
+                        }
+                    } catch {}
+                }
+            }
+            // 2) Pull audit and mirror decisions into per-user transactions by backendId
+            const auditResp = await fetch(`${api}/api/audit`).catch(()=>null);
+            if (auditResp && auditResp.ok) {
+                const logs = await auditResp.json();
+                const relevant = Array.isArray(logs) ? logs.filter(l => String(l.accountNumber) === String(acct) && (l.eventType === 'transaction_approved' || l.eventType === 'transaction_declined')) : [];
+                const statusById = new Map(); // backendId -> {status, reason}
+                relevant.forEach(l => {
+                    const id = String(l.txId || l.transactionId || l._id || '').replace(/^ObjectId\("?|"\)$/g,'');
+                    if (!id) return;
+                    statusById.set(id, { status: l.eventType === 'transaction_approved' ? 'approved' : 'declined', reason: l.reason || '' });
+                });
+                if (statusById.size) {
+                    const txKey = this.getUserTransactionKey();
+                    const hist = JSON.parse(localStorage.getItem(txKey) || '[]');
+                    let changed = false;
+                    for (let i = 0; i < hist.length; i++) {
+                        const h = hist[i];
+                        if (!h.backendId) continue;
+                        const s = statusById.get(String(h.backendId));
+                        if (!s) continue;
+                        if (h.status !== s.status) {
+                            h.status = s.status;
+                            if (s.status === 'approved') h.approvedAt = new Date().toISOString();
+                            if (s.status === 'declined') { h.declinedAt = new Date().toISOString(); h.declineReason = s.reason || ''; }
+                            hist[i] = h; changed = true;
+                            // Ensure approved store contains it
+                            if (s.status === 'approved') {
+                                const appr = JSON.parse(localStorage.getItem('approvedTransactions') || '[]');
+                                if (!appr.some(a => String(a.id) === String(h.id) || String(a.backendId) === String(h.backendId))) {
+                                    appr.push(h);
+                                    localStorage.setItem('approvedTransactions', JSON.stringify(appr));
+                                }
+                            }
+                            // Remove from pending store if still there
+                            const pend = JSON.parse(localStorage.getItem('pendingTransactions') || '[]');
+                            const pidx = pend.findIndex(p => String(p.id) === String(h.id) || String(p.backendId) === String(h.backendId));
+                            if (pidx !== -1) { pend.splice(pidx,1); localStorage.setItem('pendingTransactions', JSON.stringify(pend)); }
+                        }
+                    }
+                    if (changed) {
+                        localStorage.setItem(txKey, JSON.stringify(hist));
+                        this.updateTransactionHistory();
+                    }
+                }
+            }
+        } catch (e) {
+            if (!opts.silent) console.warn('syncServerState failed:', e?.message || e);
+        }
     }
 
     createTransaction(type, amount, description, recipient = null) {
@@ -1030,14 +1115,16 @@ class BankingApp {
     if (!confirmed) { this.showNotification('Transaction cancelled.', 'error'); return null; }
 
     // Add to pending transactions
-        const pending = JSON.parse(localStorage.getItem('pendingTransactions') || '[]');
-        pending.push(transaction);
-        localStorage.setItem('pendingTransactions', JSON.stringify(pending));
+    const pending = JSON.parse(localStorage.getItem('pendingTransactions') || '[]');
+    // Save a shallow copy for admin list but keep ids aligned
+    const adminCopy = { ...transaction };
+    pending.push(adminCopy);
+    localStorage.setItem('pendingTransactions', JSON.stringify(pending));
         
         // Add to user's transaction history as pending (per-user key)
         const userTransactionKey = this.getUserTransactionKey();
         const userTransactions = JSON.parse(localStorage.getItem(userTransactionKey) || '[]');
-        userTransactions.unshift(transaction);
+    userTransactions.unshift(transaction);
         localStorage.setItem(userTransactionKey, JSON.stringify(userTransactions));
         
         // Try to sync to backend in background (non-blocking)
@@ -1157,8 +1244,16 @@ class BankingApp {
         const userTransactions = JSON.parse(localStorage.getItem(userTransactionKey) || '[]');
         const approved = JSON.parse(localStorage.getItem('approvedTransactions') || '[]');
 
-        // Combine and sort by timestamp (newest first)
+        // Combine and reconcile: ensure approved ones are present in per-user history
         const allTransactions = [...userTransactions];
+        approved.forEach(approvedTx => {
+            // Only for this user
+            if (approvedTx.accountNumber !== this.currentUser.accountNumber) return;
+            const exists = userTransactions.find(tx => (String(tx.id) === String(approvedTx.id)) || (approvedTx.backendId && String(tx.backendId) === String(approvedTx.backendId)));
+            if (!exists) {
+                allTransactions.push(approvedTx);
+            }
+        });
 
         // Add approved transactions that aren't already in user transactions
         approved.forEach(approvedTx => {
@@ -1225,6 +1320,12 @@ class BankingApp {
         try {
             const txKey = this.getUserTransactionKey();
             const all = JSON.parse(localStorage.getItem(txKey) || '[]');
+            // Guard: ensure server-approved items contribute to approved slice
+            try {
+                const appr = JSON.parse(localStorage.getItem('approvedTransactions') || '[]');
+                const mine = appr.filter(a => String(a.accountNumber) === String(this.currentUser.accountNumber));
+                mine.forEach(a => { if (!all.find(x => String(x.id)===String(a.id) || String(x.backendId||'')===String(a.backendId||''))) all.push(a); });
+            } catch {}
             const pending = all.filter(t => t.status === 'pending');
             const approved = all.filter(t => t.status === 'approved');
 
@@ -4722,7 +4823,7 @@ class BankingApp {
     }
 
     // Transaction Receipt Modal (clickable + downloadable)
-    showTransactionReceipt(transactionElement) {
+    async showTransactionReceipt(transactionElement) {
         const description = (transactionElement.querySelector('.transaction-main')?.textContent || transactionElement.querySelector('.transaction-description')?.textContent || '').trim();
         const amountText = (transactionElement.querySelector('.transaction-amount')?.textContent || '').trim();
         const date = (transactionElement.querySelector('.transaction-date')?.textContent || '').trim();
@@ -4731,6 +4832,8 @@ class BankingApp {
         // Try to retrieve full transaction details by id for richer fields and freshest status
         const txId = transactionElement.getAttribute('data-txid');
         let txDetails = null; let txStatus = fallbackStatusClass; let declineReason = '';
+        // Fast sync to pick up latest admin decision before rendering
+        await this.syncServerState({ silent: true }).catch(()=>{});
         try {
             const userTransactionKey = this.getUserTransactionKey();
             const userTransactions = JSON.parse(localStorage.getItem(userTransactionKey) || '[]');

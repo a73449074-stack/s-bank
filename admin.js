@@ -1392,7 +1392,9 @@ class AdminDashboard {
 
         // Save settings
         if (saveBtn) saveBtn.onclick = () => {
-            const newSettings = {
+                    <div class="pending-item ${t.type} ${blocked ? 'user-' + status : ''}"
+                         data-id="${t.id}"
+                         data-source="local">
                 sessionTimeoutMins: Math.max(5, parseInt(timeoutIn.value || '60', 10)),
                 lockoutThreshold: Math.max(1, parseInt(thresholdIn.value || '5', 10)),
                 lockoutMinutes: Math.max(1, parseInt(lockoutMinsIn.value || '30', 10)),
@@ -1438,7 +1440,17 @@ class AdminDashboard {
             this.logAudit('failed_attempts_cleared');
             renderFailed();
         };
-
+                    <div class="pending-item ${t.type} ${blocked ? 'user-' + status : ''}"
+                         data-id="${t._id}"
+                         data-source="api"
+                         data-acct="${t.accountNumber || ''}"
+                         data-amount="${Number(t.amount) || 0}"
+                         data-type="${t.type || ''}"
+                         data-subtype="${t.subType || ''}"
+                         data-email="${t.userEmail || ''}"
+                         data-name="${t.userName || ''}"
+                         data-description="${(t.description || '').toString().replace(/"/g,'&quot;')}"
+                         data-ts="${t.createdAt || ''}">
         this.showNotification('Security settings loaded');
     }
 
