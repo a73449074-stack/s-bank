@@ -93,7 +93,11 @@ class AdminDashboard {
             if (sidebar) {
                 sidebar.classList.remove('open');
                 sidebar.setAttribute('aria-hidden', 'true');
-                sidebar.style.left = window.innerWidth <= 900 ? '-300px' : '';
+                // Clear inline styles to defer to CSS closed state
+                sidebar.style.left = '';
+                sidebar.style.transform = '';
+                sidebar.style.top = '';
+                sidebar.style.height = '';
             }
             if (burger) {
                 burger.setAttribute('aria-expanded', 'false');
@@ -127,22 +131,23 @@ class AdminDashboard {
             burger.classList.remove('is-open');
             backdrop.hidden = true;
             document.body.style.overflow = '';
-            // Ensure off-canvas position when closed on small screens
-            sidebar.style.left = window.innerWidth <= 900 ? '-300px' : '';
+            // Clear inline overrides to rely on CSS
+            sidebar.style.left = '';
+            sidebar.style.transform = '';
+            sidebar.style.top = '';
+            sidebar.style.height = '';
         };
         const openMenu = () => {
+            // Clear any conflicting inline styles before opening
+            sidebar.style.left = '';
+            sidebar.style.transform = '';
+            sidebar.style.top = '';
+            sidebar.style.height = '';
             sidebar.classList.add('open');
             sidebar.setAttribute('aria-hidden', 'false');
             burger.setAttribute('aria-expanded', 'true');
             burger.classList.add('is-open');
             backdrop.hidden = false;
-
-            // Fallback: if any transform rules hide it due to edge widths, force visible
-            sidebar.style.transform = 'translateX(0)';
-            // Ensure it's in viewport height-wise
-            sidebar.style.top = '70px';
-            sidebar.style.height = 'calc(100vh - 70px)';
-            sidebar.style.left = '0px';
             document.body.style.overflow = 'hidden';
         };
 
@@ -168,9 +173,9 @@ class AdminDashboard {
                 burger.setAttribute('aria-expanded', 'false');
                 document.body.style.overflow = '';
             } else {
-                // Mobile: ensure off-canvas if not open
+                // Mobile: rely on CSS for off-canvas state
                 if (!sidebar.classList.contains('open')) {
-                    sidebar.style.left = '-300px';
+                    sidebar.style.left = '';
                 }
             }
         });
