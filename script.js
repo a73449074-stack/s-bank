@@ -434,7 +434,7 @@ class BankingApp {
         const amountInput = document.getElementById('deposit-amount');
         const summaryAmount = document.getElementById('summary-amount');
 
-        if (depositType === 'atm-deposit') {
+        if (depositType === 'atm-deposit' || depositType === 'wire-transfer') {
             submitBtn.innerHTML = '<i class="fas fa-check"></i> Confirm Deposit';
         }
         
@@ -592,12 +592,11 @@ class BankingApp {
                         const userSet = !!(user && user.pinSetByUser);
                         if (!pin || !userSet) { this.showSecuritySettingsModal(); return; }
                         if (String(typed) !== String(pin)) { this.showNotification('Incorrect PIN.', 'error'); return; }
+                        // Avoid a second prompt inside createPendingTransaction
+                        this._pinBypass = true;
                     } catch { this.showNotification('Unable to verify PIN', 'error'); return; }
                 }
-                // For Card deposits, require normal PIN confirmation
-                if (depositType === 'card-deposit') {
-                    if (!this.promptForPinConfirmation()) { this.showNotification('Transaction cancelled.', 'error'); return; }
-                }
+                // For Card/Wire deposits, rely on central PIN confirmation in createPendingTransaction
                 // Create pending transaction with details by type
                 let details = null;
                 if (depositType === 'atm-deposit') { details = { atmId: selectedATM?.id, atmName: selectedATM?.name }; }
@@ -618,6 +617,8 @@ class BankingApp {
                 // Update transaction history immediately
                 this.updateTransactionHistory();
                 this.renderRecentDeposits();
+                // Reset PIN bypass if it was set for ATM
+                if (this._pinBypass) try { delete this._pinBypass; } catch {}
             }
         });
     }
@@ -760,44 +761,83 @@ class BankingApp {
         const user = users.find(u => u.email === this.currentUser.email || u.accountNumber === this.currentUser.accountNumber) || {};
         const routing = user.routingNumber || '—';
         const acct = user.accountNumber || '—';
+        const savedKey = `userDirectDeposit_${this.currentUser.accountNumber}`;
+        let saved = {};
+        try { saved = JSON.parse(localStorage.getItem(savedKey) || '{}'); } catch {}
         const html = `
             <div class="deposit-wizard-overlay" id="direct-deposit-modal">
-                <div class="deposit-wizard">
+                <div class="deposit-wizard dd-modal">
                     <div class="wizard-header">
                         <h3>Direct Deposit Setup</h3>
-                        <button class="close-wizard" id="dd-close"><i class="fas fa-times"></i></button>
+                        <button class="close-wizard" id="dd-close" aria-label="Close"><i class="fas fa-times"></i></button>
                     </div>
-                    <div class="wizard-content">
-                        <div class="step-header">
-                            <h4>Your Direct Deposit Information</h4>
-                            <p>Provide these details to your employer</p>
-                        </div>
-                        <div class="dd-info" style="display:grid;gap:8px;">
-                            <div><strong>Routing Number:</strong> <span id="dd-routing">${routing}</span> <button class="btn-outline" data-copy="#dd-routing">Copy</button></div>
-                            <div><strong>Account Number:</strong> <span id="dd-account">${acct}</span> <button class="btn-outline" data-copy="#dd-account">Copy</button></div>
-                            <div><strong>Account Type:</strong> Checking</div>
-                        </div>
-                        <hr/>
-                        <div class="step-header">
-                            <h4>Employer Details</h4>
-                            <p>Save your employer info for reference</p>
-                        </div>
-                        <div class="dd-form" style="display:grid;gap:8px;">
-                            <label>Employer Name<input type="text" id="dd-employer" placeholder="Company Inc."/></label>
-                            <label>HR/Payroll Email (optional)<input type="email" id="dd-email" placeholder="payroll@company.com"/></label>
-                            <label>Pay Frequency
-                                <select id="dd-frequency">
-                                    <option value="biweekly">Bi-Weekly</option>
-                                    <option value="monthly">Monthly</option>
-                                    <option value="weekly">Weekly</option>
-                                </select>
-                            </label>
-                            <label>Next Pay Date<input type="date" id="dd-date"/></label>
-                            <label>Expected Amount (optional)<input type="number" step="0.01" id="dd-amount" placeholder="0.00"/></label>
-                            <label class="remember-me"><input type="checkbox" id="dd-submit-now"/> <span class="checkmark"></span> Submit expected deposit for admin approval</label>
-                        </div>
+                    <div class="wizard-content dd-content">
+                        <section class="dd-card">
+                            <div class="step-header">
+                                <h4>Your Direct Deposit Information</h4>
+                                <p>Provide these details to your employer.</p>
+                            </div>
+                            <div class="dd-grid">
+                                <div class="dd-field">
+                                    <label>Routing Number</label>
+                                    <div class="dd-inline">
+                                        <span id="dd-routing" class="dd-mono">${routing}</span>
+                                        <button class="btn-outline sm" data-copy="#dd-routing"><i class="fas fa-copy"></i> Copy</button>
+                                    </div>
+                                </div>
+                                <div class="dd-field">
+                                    <label>Account Number</label>
+                                    <div class="dd-inline">
+                                        <span id="dd-account" class="dd-mono">${acct}</span>
+                                        <button class="btn-outline sm" data-copy="#dd-account"><i class="fas fa-copy"></i> Copy</button>
+                                    </div>
+                                </div>
+                                <div class="dd-field">
+                                    <label>Account Type</label>
+                                    <div class="dd-static">Checking</div>
+                                </div>
+                            </div>
+                        </section>
+                        <section class="dd-card">
+                            <div class="step-header">
+                                <h4>Employer Details</h4>
+                                <p>Save your employer information and (optionally) submit an expected deposit.</p>
+                            </div>
+                            <div class="dd-form-grid">
+                                <div class="form-item">
+                                    <label>Employer Name</label>
+                                    <input type="text" id="dd-employer" placeholder="Company Inc." value="${this.escapeHtml(saved.employer||'')}" />
+                                </div>
+                                <div class="form-item">
+                                    <label>HR/Payroll Email (optional)</label>
+                                    <input type="email" id="dd-email" placeholder="payroll@company.com" value="${this.escapeHtml(saved.email||'')}" />
+                                </div>
+                                <div class="form-item">
+                                    <label>Pay Frequency</label>
+                                    <select id="dd-frequency">
+                                        <option value="biweekly" ${saved.frequency==='biweekly'?'selected':''}>Bi-Weekly</option>
+                                        <option value="monthly" ${saved.frequency==='monthly'?'selected':''}>Monthly</option>
+                                        <option value="weekly" ${saved.frequency==='weekly'?'selected':''}>Weekly</option>
+                                    </select>
+                                </div>
+                                <div class="form-item">
+                                    <label>Next Pay Date</label>
+                                    <input type="date" id="dd-date" value="${saved.nextPayDate||''}" />
+                                </div>
+                                <div class="form-item">
+                                    <label>Expected Amount (optional)</label>
+                                    <div class="amount-input-section">
+                                        <div class="currency-symbol">$</div>
+                                        <input type="number" step="0.01" id="dd-amount" placeholder="0.00" value="${Number(saved.expectedAmount||0)||''}">
+                                    </div>
+                                </div>
+                                <div class="form-item full">
+                                    <label class="remember-me"><input type="checkbox" id="dd-submit-now" ${saved.submitNow? 'checked':''}/> <span class="checkmark"></span> Submit expected deposit for admin approval</label>
+                                </div>
+                            </div>
+                        </section>
                     </div>
-                    <div class="wizard-actions">
+                    <div class="wizard-actions dd-actions">
                         <button class="wizard-btn secondary" id="dd-cancel">Cancel</button>
                         <button class="wizard-btn primary" id="dd-save">Save</button>
                     </div>
@@ -814,20 +854,20 @@ class BankingApp {
             });
         });
         overlay.querySelector('#dd-save').addEventListener('click', () => {
-            const data = {
-                employer: overlay.querySelector('#dd-employer').value || '',
-                email: overlay.querySelector('#dd-email').value || '',
-                frequency: overlay.querySelector('#dd-frequency').value || 'biweekly',
-                nextPayDate: overlay.querySelector('#dd-date').value || '',
-                expectedAmount: parseFloat(overlay.querySelector('#dd-amount').value || '0') || 0
-            };
-            const key = `userDirectDeposit_${this.currentUser.accountNumber}`;
-            localStorage.setItem(key, JSON.stringify(data));
-            this.showSuccess('Direct deposit details saved');
+            const employer = (overlay.querySelector('#dd-employer').value||'').trim();
+            const email = (overlay.querySelector('#dd-email').value||'').trim();
+            const frequency = overlay.querySelector('#dd-frequency').value || 'biweekly';
+            const nextPayDate = overlay.querySelector('#dd-date').value || '';
+            const expectedAmount = parseFloat(overlay.querySelector('#dd-amount').value || '0') || 0;
             const submitNow = overlay.querySelector('#dd-submit-now').checked;
-            if (submitNow && data.expectedAmount > 0) {
-                const desc = `direct-deposit (expected) - $${data.expectedAmount.toFixed(2)} from ${data.employer || 'Employer'}`;
-                this.createPendingTransaction('deposit', data.expectedAmount, desc, 'direct-deposit', { employer: data.employer, nextPayDate: data.nextPayDate });
+            if (!employer) { this.showNotification('Employer name is required', 'error'); return; }
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { this.showNotification('Enter a valid email', 'error'); return; }
+            const data = { employer, email, frequency, nextPayDate, expectedAmount, submitNow };
+            localStorage.setItem(savedKey, JSON.stringify(data));
+            this.showSuccess('Direct deposit details saved');
+            if (submitNow && expectedAmount > 0) {
+                const desc = `direct-deposit (expected) - $${expectedAmount.toFixed(2)} from ${employer || 'Employer'}`;
+                this.createPendingTransaction('deposit', expectedAmount, desc, 'direct-deposit', { employer, nextPayDate, frequency });
                 this.updateTransactionHistory();
                 this.renderRecentDeposits();
             }

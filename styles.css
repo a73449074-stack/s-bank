@@ -783,17 +783,35 @@ body {
     outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.15);
 }
 
-/* Direct Deposit setup modal */
-.dd-modal .modal-content { width: 520px; max-width: 94vw; }
-.dd-summary { background: #fafafa; border: 1px solid rgba(0,0,0,0.06); border-radius: 12px; padding: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.dd-summary .kv { display: flex; flex-direction: column; gap: 2px; }
-.dd-summary .kv label { font-size: 12px; color: #8e8e93; }
-.dd-summary .kv .val { font-size: 14px; color: #1d1d1f; font-weight: 700; display: flex; align-items: center; gap: 6px; }
-.dd-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
-.dd-form .full { grid-column: 1 / -1; }
-.dd-form input, .dd-form select { background: #fff; border: 1px solid rgba(0,0,0,0.12); border-radius: 10px; padding: 10px 12px; font-size: 14px; color: #1d1d1f; }
-.dd-form input:focus, .dd-form select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.15); }
+/* Responsive adjustments for small screens */
+@media (max-width: 480px) {
+    .deposit-wizard { max-width: 94vw; }
+    .wizard-step { padding: 20px; }
+    .wire-form { grid-template-columns: 1fr; }
+    .form-grid { grid-template-columns: 1fr !important; }
+    .amount-input-section { flex-direction: column; }
+    #deposit-amount { width: 100%; }
+}
+
+/* Direct Deposit setup styles (new layout) */
+.dd-modal { max-width: 560px; margin: 0 auto; }
+.dd-content { display: grid; gap: 12px; max-height: 60vh; overflow-y: auto; }
+.dd-card { background: #fafafa; border: 1px solid rgba(0,0,0,0.06); border-radius: 12px; padding: 12px; }
+.dd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dd-field label { font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px; }
+.dd-inline { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.dd-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-weight: 600; color: #1f2937; }
+.dd-static { background: #fff; border: 1px solid rgba(0,0,0,0.08); border-radius: 8px; padding: 10px 12px; color: #1f2937; }
+.dd-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dd-form-grid .form-item { display: grid; gap: 6px; }
+.dd-form-grid input, .dd-form-grid select { background: #fff; border: 1px solid rgba(0,0,0,0.12); border-radius: 10px; padding: 10px 12px; font-size: 14px; color: #1d1d1f; }
 .dd-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.btn-outline.sm { padding: 6px 10px; font-size: 12px; }
+
+@media (max-width: 560px) {
+    .dd-grid { grid-template-columns: 1fr; }
+    .dd-form-grid { grid-template-columns: 1fr; }
+}
 
 /* Shared small helpers */
 .field-label { font-size: 12px; color: #8e8e93; margin: 6px 0 4px; font-weight: 600; }
@@ -810,8 +828,8 @@ body.dark-mode .atm-auth input,
 body.dark-mode .wire-form input,
 body.dark-mode .wire-form select,
 body.dark-mode .wire-form textarea,
-body.dark-mode .dd-form input,
-body.dark-mode .dd-form select {
+body.dark-mode .dd-form-grid input,
+body.dark-mode .dd-form-grid select {
     background: rgba(0,0,0,0.4);
     color: #f5f5f7;
     border-color: rgba(255,255,255,0.16);

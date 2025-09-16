@@ -891,6 +891,57 @@ class AdminDashboard {
             fetch(`${this.apiBase}/api/transactions/${transactionId}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
                 .then(r => { if (!r.ok) throw new Error('Approve failed'); return r.json(); })
                 .then(() => {
+                    try {
+                        // Mirror approval into local stores so client UI updates immediately
+                        const pending = JSON.parse(localStorage.getItem('pendingTransactions') || '[]');
+                        const approved = JSON.parse(localStorage.getItem('approvedTransactions') || '[]');
+                        const pIdx = pending.findIndex(t => String(t.backendId) === String(transactionId) || String(t.id) === String(transactionId));
+                        if (pIdx !== -1) {
+                            const tx = pending[pIdx];
+                            const acct = tx.accountNumber;
+                            const balKey = `userBalance_${acct}`;
+                            const txKey = `userTransactions_${acct}`;
+                            let bal = parseFloat(localStorage.getItem(balKey) || '0');
+                            tx.status = 'approved';
+                            tx.approvedAt = new Date().toISOString();
+                            if (tx.type === 'deposit') bal += Number(tx.amount) || 0;
+                            if (tx.type === 'transfer' || tx.type === 'billpay') bal -= Number(tx.amount) || 0;
+                            // Update user history (match by id or backendId)
+                            const history = JSON.parse(localStorage.getItem(txKey) || '[]');
+                            const hIdx = history.findIndex(h => String(h.id) === String(tx.id) || String(h.backendId) === String(transactionId));
+                            if (hIdx !== -1) {
+                                history[hIdx].status = 'approved';
+                                history[hIdx].approvedAt = tx.approvedAt;
+                            } else {
+                                // If not found, append to ensure visibility
+                                history.unshift({ ...tx });
+                            }
+                            localStorage.setItem(txKey, JSON.stringify(history));
+                            localStorage.setItem(balKey, String(bal));
+                            // Move to approved store and remove from pending
+                            approved.push(tx);
+                            pending.splice(pIdx, 1);
+                            localStorage.setItem('approvedTransactions', JSON.stringify(approved));
+                            localStorage.setItem('pendingTransactions', JSON.stringify(pending));
+                            // Update client UI if available
+                            try {
+                                if (window.bankingApp) {
+                                    window.bankingApp.updateAdminDashboard?.();
+                                    if (String(window.bankingApp.currentUser?.accountNumber) === String(acct)) {
+                                        window.bankingApp.addNotification({
+                                            title: 'Transaction Approved',
+                                            message: `${String(tx.type).toUpperCase()} ${tx.subType ? '('+tx.subType+') ' : ''}for $${Number(tx.amount).toFixed(2)} approved.`,
+                                            type: 'success'
+                                        }, true);
+                                        window.bankingApp.currentBalance = bal;
+                                        window.bankingApp.updateBalanceDisplay();
+                                        window.bankingApp.updateAccountLimitsOnApproval?.(tx);
+                                    }
+                                    window.bankingApp.updateTransactionHistory?.();
+                                }
+                            } catch {}
+                        }
+                    } catch {}
                     this.showSuccess('Transaction approved');
                     this.loadAdminTransactions();
                     this.loadRecentTransactions();
@@ -982,13 +1033,13 @@ class AdminDashboard {
                     // Also update local stores so the user dashboard reflects declined immediately
                     try {
                         const pending = JSON.parse(localStorage.getItem('pendingTransactions') || '[]');
-                        const idx = pending.findIndex(t => String(t.id) === String(transactionId));
+                        const idx = pending.findIndex(t => String(t.backendId) === String(transactionId) || String(t.id) === String(transactionId));
                         if (idx !== -1) {
                             const tx = pending[idx];
                             const acct = tx.accountNumber;
                             const txKey = `userTransactions_${acct}`;
                             const history = JSON.parse(localStorage.getItem(txKey) || '[]');
-                            const hIdx = history.findIndex(h => String(h.id) === String(tx.id));
+                            const hIdx = history.findIndex(h => String(h.id) === String(tx.id) || String(h.backendId) === String(transactionId));
                             if (hIdx !== -1) {
                                 history[hIdx].status = 'declined';
                                 history[hIdx].declinedAt = new Date().toISOString();
@@ -1000,7 +1051,7 @@ class AdminDashboard {
                             localStorage.setItem('pendingTransactions', JSON.stringify(pending));
                             // Refresh user UI if applicable
                             if (window.bankingApp) {
-                                window.bankingApp.updateTransactionHistory();
+                                window.bankingApp.updateTransactionHistory?.();
                                 window.bankingApp.updateAdminDashboard?.();
                                 if (String(window.bankingApp.currentUser?.accountNumber) === String(acct)) {
                                     window.bankingApp.addNotification({
@@ -1011,6 +1062,23 @@ class AdminDashboard {
                                 }
                             }
                             this.logAudit('transaction_declined', { transactionId: tx.id, accountNumber: tx.accountNumber, userEmail: tx.userEmail }, { type: tx.type, amount: Number(tx.amount), description: tx.description, reason });
+                        } else {
+                            // Fallback: update any per-user history that references this backend id
+                            try {
+                                for (let i = 0; i < localStorage.length; i++) {
+                                    const k = localStorage.key(i);
+                                    if (!k || !k.startsWith('userTransactions_')) continue;
+                                    const hist = JSON.parse(localStorage.getItem(k) || '[]');
+                                    const hIdx2 = hist.findIndex(h => String(h.backendId) === String(transactionId) || String(h.id) === String(transactionId));
+                                    if (hIdx2 !== -1) {
+                                        hist[hIdx2].status = 'declined';
+                                        hist[hIdx2].declinedAt = new Date().toISOString();
+                                        hist[hIdx2].declineReason = reason || '';
+                                        localStorage.setItem(k, JSON.stringify(hist));
+                                        break;
+                                    }
+                                }
+                            } catch {}
                         }
                     } catch {}
                     this.showNotification('Transaction declined', 'error');
