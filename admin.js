@@ -581,7 +581,7 @@ class AdminDashboard {
                 const displayBal = Number.isFinite(numeric) ? numeric : fallback;
                 const isFrozen = status === 'frozen';
                 return `
-                    <tr data-user="${u.accountNumber || ''}">
+                    <tr data-user="${u.accountNumber || ''}" data-backend-id="${u._id || u.backendId || ''}">
                         <td>
                             <div class="user-cell">
                                 <div class="user-avatar">${initials}</div>
@@ -593,8 +593,8 @@ class AdminDashboard {
                         <td>$${displayBal.toFixed(2)}</td>
                         <td><span class="status-badge ${status}">${status.charAt(0).toUpperCase() + status.slice(1)}</span></td>
                         <td>
-                            <button class="action-btn danger" data-action="delete" data-user="${u.accountNumber}">Delete</button>
-                            <button class="action-btn" data-action="${isFrozen ? 'unfreeze' : 'freeze'}" data-user="${u.accountNumber}">${isFrozen ? 'Unfreeze' : 'Freeze'}</button>
+                            <button class="action-btn danger" data-action="delete" data-user="${u.accountNumber}" data-backend-id="${u._id || u.backendId || ''}">Delete</button>
+                            <button class="action-btn" data-action="${isFrozen ? 'unfreeze' : 'freeze'}" data-user="${u.accountNumber}" data-backend-id="${u._id || u.backendId || ''}">${isFrozen ? 'Unfreeze' : 'Freeze'}</button>
                         </td>
                     </tr>
                 `;
@@ -616,9 +616,10 @@ class AdminDashboard {
                     e.stopPropagation();
                     const action = btn.dataset.action;
                     const account = btn.dataset.user;
-                    if (action === 'delete') return this.deleteUser(account);
-                    if (action === 'freeze') return this.setUserFreeze(account, true);
-                    if (action === 'unfreeze') return this.setUserFreeze(account, false);
+                    const backendId = btn.dataset.backendId || '';
+                    if (action === 'delete') return this.deleteUser(account, backendId);
+                    if (action === 'freeze') return this.setUserFreeze(account, true, backendId);
+                    if (action === 'unfreeze') return this.setUserFreeze(account, false, backendId);
                 });
             });
         };
@@ -1368,8 +1369,21 @@ class AdminDashboard {
         // not used by new Users table
     }
 
-    deleteUser(accountNumber) {
+    async deleteUser(accountNumber, backendId) {
         if (!confirm('Delete this user permanently? This cannot be undone.')) return;
+        // Try backend first if we have an id and apiBase
+        if (backendId && this.apiBase) {
+            try {
+                const resp = await fetch(`${this.apiBase}/api/users/${backendId}`, { method: 'DELETE' });
+                if (resp.ok) {
+                    this.showSuccess('User deleted successfully.');
+                    this.loadUserManagement();
+                    this.updateStats();
+                    return;
+                }
+            } catch (_) { /* fall back to local */ }
+        }
+        // Local fallback
         let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
         const idx = users.findIndex(u => u.accountNumber === accountNumber);
         if (idx === -1) return this.showError('User not found');
@@ -1385,7 +1399,20 @@ class AdminDashboard {
         this.updateStats();
     }
 
-    setUserFreeze(accountNumber, freeze) {
+    async setUserFreeze(accountNumber, freeze, backendId) {
+        // Try backend first
+        if (backendId && this.apiBase) {
+            try {
+                const resp = await fetch(`${this.apiBase}/api/users/${backendId}/${freeze ? 'freeze' : 'unfreeze'}`, { method: 'POST' });
+                if (resp.ok) {
+                    this.showSuccess(`${freeze ? 'Frozen' : 'Unfrozen'} account`);
+                    this.loadUserManagement();
+                    this.updateStats();
+                    return;
+                }
+            } catch (_) { /* fall back to local */ }
+        }
+        // Local fallback
         let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
         const idx = users.findIndex(u => u.accountNumber === accountNumber);
         if (idx === -1) return this.showError('User not found');
