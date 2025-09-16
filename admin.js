@@ -836,7 +836,17 @@ class AdminDashboard {
                 const blocked = status !== 'active';
                 const initials = (t.userName||t.userEmail||'U').toString().trim().split(' ').map(n=>n[0]).slice(0,2).join('');
                 return `
-                <div class="pending-item ${t.type} ${blocked ? 'user-' + status : ''}" data-id="${t._id}" data-source="api">
+                <div class="pending-item ${t.type} ${blocked ? 'user-' + status : ''}"
+                     data-id="${t._id}"
+                     data-source="api"
+                     data-acct="${t.accountNumber || ''}"
+                     data-amount="${Number(t.amount) || 0}"
+                     data-type="${t.type || ''}"
+                     data-subtype="${t.subType || ''}"
+                     data-email="${t.userEmail || ''}"
+                     data-name="${t.userName || ''}"
+                     data-description="${(t.description || '').toString().replace(/"/g,'&quot;')}"
+                     data-ts="${t.createdAt || ''}">
                     <div class="pending-user-info">
                         <div class="user-avatar ${blocked ? 'status-' + status : ''}">${initials}</div>
                         <div class="user-details">
@@ -870,8 +880,18 @@ class AdminDashboard {
                     const item = btn.closest('.pending-item');
                     const id = item.getAttribute('data-id');
                     const source = item.getAttribute('data-source') || 'local';
-                    if (btn.dataset.action === 'approve') return this.adminApproveTransaction(id, source);
-                    if (btn.dataset.action === 'reject') return this.adminRejectTransaction(id, source);
+                    const meta = item ? {
+                        accountNumber: item.getAttribute('data-acct') || '',
+                        amount: Number(item.getAttribute('data-amount') || '0'),
+                        type: item.getAttribute('data-type') || '',
+                        subType: item.getAttribute('data-subtype') || '',
+                        userEmail: item.getAttribute('data-email') || '',
+                        userName: item.getAttribute('data-name') || '',
+                        description: item.getAttribute('data-description') || '',
+                        ts: item.getAttribute('data-ts') || ''
+                    } : null;
+                    if (btn.dataset.action === 'approve') return this.adminApproveTransaction(id, source, meta);
+                    if (btn.dataset.action === 'reject') return this.adminRejectTransaction(id, source, meta);
                 };
             });
         };
@@ -886,7 +906,7 @@ class AdminDashboard {
         }
     }
 
-    adminApproveTransaction(transactionId, source = 'local') {
+    adminApproveTransaction(transactionId, source = 'local', meta = null) {
         if (source === 'api' && this.apiBase) {
             fetch(`${this.apiBase}/api/transactions/${transactionId}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
                 .then(r => { if (!r.ok) throw new Error('Approve failed'); return r.json(); })
@@ -938,6 +958,52 @@ class AdminDashboard {
                                         window.bankingApp.updateAccountLimitsOnApproval?.(tx);
                                     }
                                     window.bankingApp.updateTransactionHistory?.();
+                                }
+                            } catch {}
+                        } else if (meta && meta.accountNumber) {
+                            // Metadata-based reconciliation when backendId not yet attached locally
+                            try {
+                                const acct = meta.accountNumber;
+                                const txKey = `userTransactions_${acct}`;
+                                const balKey = `userBalance_${acct}`;
+                                const hist = JSON.parse(localStorage.getItem(txKey) || '[]');
+                                // Match pending by amount/type/subType/description and same-day
+                                let hIdx = hist.findIndex(h => h.status==='pending' && String(h.type)===String(meta.type||h.type) && Number(h.amount)===Number(meta.amount) && (!meta.subType || String(h.subType||'')===String(meta.subType)) && (!meta.description || String(h.description||'')===String(meta.description)));
+                                if (hIdx === -1) {
+                                    const metaDate = meta.ts ? new Date(meta.ts).toDateString() : null;
+                                    hIdx = hist.findIndex(h => h.status==='pending' && String(h.type)===String(meta.type||h.type) && Number(h.amount)===Number(meta.amount) && (!metaDate || new Date(h.timestamp).toDateString() === metaDate));
+                                }
+                                if (hIdx !== -1) {
+                                    const tx = hist[hIdx];
+                                    tx.status = 'approved';
+                                    tx.approvedAt = new Date().toISOString();
+                                    tx.backendId = String(transactionId);
+                                    hist[hIdx] = tx;
+                                    localStorage.setItem(txKey, JSON.stringify(hist));
+                                    // Update balance
+                                    let bal = parseFloat(localStorage.getItem(balKey) || '0');
+                                    if (tx.type === 'deposit') bal += Number(tx.amount) || 0;
+                                    if (tx.type === 'transfer' || tx.type === 'billpay') bal -= Number(tx.amount) || 0;
+                                    localStorage.setItem(balKey, String(bal));
+                                    // Remove from pending store if exists and push to approved
+                                    const pend = JSON.parse(localStorage.getItem('pendingTransactions') || '[]');
+                                    const p2 = pend.findIndex(p => String(p.id)===String(tx.id) || String(p.backendId)===String(transactionId));
+                                    if (p2 !== -1) { pend.splice(p2,1); localStorage.setItem('pendingTransactions', JSON.stringify(pend)); }
+                                    const appr = JSON.parse(localStorage.getItem('approvedTransactions') || '[]');
+                                    if (!appr.some(a => String(a.id)===String(tx.id) || String(a.backendId)===String(transactionId))) { appr.push(tx); localStorage.setItem('approvedTransactions', JSON.stringify(appr)); }
+                                    // UI updates
+                                    try {
+                                        if (window.bankingApp) {
+                                            window.bankingApp.updateAdminDashboard?.();
+                                            if (String(window.bankingApp.currentUser?.accountNumber) === String(acct)) {
+                                                window.bankingApp.addNotification({ title: 'Transaction Approved', message: `${String(tx.type).toUpperCase()} ${tx.subType ? '('+tx.subType+') ' : ''}for $${Number(tx.amount).toFixed(2)} approved.`, type: 'success' }, true);
+                                                window.bankingApp.currentBalance = bal;
+                                                window.bankingApp.updateBalanceDisplay();
+                                                window.bankingApp.updateAccountLimitsOnApproval?.(tx);
+                                            }
+                                            window.bankingApp.updateTransactionHistory?.();
+                                        }
+                                    } catch {}
                                 }
                             } catch {}
                         }
@@ -1024,7 +1090,7 @@ class AdminDashboard {
         } catch {}
     }
 
-    adminRejectTransaction(transactionId, source = 'local') {
+    adminRejectTransaction(transactionId, source = 'local', meta = null) {
         if (source === 'api' && this.apiBase) {
             const reason = prompt('Enter reason for declining this transaction:') || '';
             fetch(`${this.apiBase}/api/transactions/${transactionId}/reject`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) })
@@ -1065,18 +1131,30 @@ class AdminDashboard {
                         } else {
                             // Fallback: update any per-user history that references this backend id
                             try {
+                                let updated = false;
                                 for (let i = 0; i < localStorage.length; i++) {
                                     const k = localStorage.key(i);
                                     if (!k || !k.startsWith('userTransactions_')) continue;
                                     const hist = JSON.parse(localStorage.getItem(k) || '[]');
-                                    const hIdx2 = hist.findIndex(h => String(h.backendId) === String(transactionId) || String(h.id) === String(transactionId));
+                                    let hIdx2 = hist.findIndex(h => String(h.backendId) === String(transactionId) || String(h.id) === String(transactionId));
+                                    if (hIdx2 === -1 && meta) {
+                                        // Try metadata-based match when backendId hasn't been attached yet
+                                        hIdx2 = hist.findIndex(h => h.status==='pending' && String(h.type)===String(meta.type||h.type) && Number(h.amount)===Number(meta.amount) && (!meta.subType || String(h.subType||'')===String(meta.subType)) && (!meta.description || String(h.description||'')===String(meta.description)));
+                                    }
                                     if (hIdx2 !== -1) {
                                         hist[hIdx2].status = 'declined';
                                         hist[hIdx2].declinedAt = new Date().toISOString();
                                         hist[hIdx2].declineReason = reason || '';
                                         localStorage.setItem(k, JSON.stringify(hist));
+                                        updated = true;
                                         break;
                                     }
+                                }
+                                // Also remove a matching pending entry if present
+                                if (meta && meta.accountNumber) {
+                                    const pend = JSON.parse(localStorage.getItem('pendingTransactions') || '[]');
+                                    const pidx = pend.findIndex(p => String(p.accountNumber)===String(meta.accountNumber) && Number(p.amount)===Number(meta.amount) && String(p.type)===String(meta.type));
+                                    if (pidx !== -1) { pend.splice(pidx,1); localStorage.setItem('pendingTransactions', JSON.stringify(pend)); }
                                 }
                             } catch {}
                         }
