@@ -979,6 +979,40 @@ class AdminDashboard {
             fetch(`${this.apiBase}/api/transactions/${transactionId}/reject`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) })
                 .then(r => { if (!r.ok) throw new Error('Reject failed'); return r.json(); })
                 .then(() => {
+                    // Also update local stores so the user dashboard reflects declined immediately
+                    try {
+                        const pending = JSON.parse(localStorage.getItem('pendingTransactions') || '[]');
+                        const idx = pending.findIndex(t => String(t.id) === String(transactionId));
+                        if (idx !== -1) {
+                            const tx = pending[idx];
+                            const acct = tx.accountNumber;
+                            const txKey = `userTransactions_${acct}`;
+                            const history = JSON.parse(localStorage.getItem(txKey) || '[]');
+                            const hIdx = history.findIndex(h => String(h.id) === String(tx.id));
+                            if (hIdx !== -1) {
+                                history[hIdx].status = 'declined';
+                                history[hIdx].declinedAt = new Date().toISOString();
+                                history[hIdx].declineReason = reason || '';
+                                localStorage.setItem(txKey, JSON.stringify(history));
+                            }
+                            // Remove from pending
+                            pending.splice(idx, 1);
+                            localStorage.setItem('pendingTransactions', JSON.stringify(pending));
+                            // Refresh user UI if applicable
+                            if (window.bankingApp) {
+                                window.bankingApp.updateTransactionHistory();
+                                window.bankingApp.updateAdminDashboard?.();
+                                if (String(window.bankingApp.currentUser?.accountNumber) === String(acct)) {
+                                    window.bankingApp.addNotification({
+                                        title: 'Transaction Declined',
+                                        message: `${String(tx.type).toUpperCase()} ${tx.subType ? '('+tx.subType+') ' : ''}for $${Number(tx.amount).toFixed(2)} was declined.${tx.description ? ' '+tx.description : ''}`,
+                                        type: 'error'
+                                    }, true);
+                                }
+                            }
+                            this.logAudit('transaction_declined', { transactionId: tx.id, accountNumber: tx.accountNumber, userEmail: tx.userEmail }, { type: tx.type, amount: Number(tx.amount), description: tx.description, reason });
+                        }
+                    } catch {}
                     this.showNotification('Transaction declined', 'error');
                     this.loadAdminTransactions();
                     this.loadRecentTransactions();
@@ -1015,9 +1049,11 @@ class AdminDashboard {
     this.loadRecentTransactions();
         try {
             if (window.bankingApp) {
+                // Force user dashboard to reflect declined immediately
+                window.bankingApp.updateTransactionHistory();
                 window.bankingApp.updateAdminDashboard();
-                const acct = tx.accountNumber;
-                if (String(window.bankingApp.currentUser?.accountNumber) === String(acct)) {
+                const acct2 = tx.accountNumber;
+                if (String(window.bankingApp.currentUser?.accountNumber) === String(acct2)) {
                     window.bankingApp.addNotification({
                         title: 'Transaction Declined',
                         message: `${String(tx.type).toUpperCase()} ${tx.subType ? '('+tx.subType+') ' : ''}for $${Number(tx.amount).toFixed(2)} was declined.${tx.description ? ' '+tx.description : ''}`,

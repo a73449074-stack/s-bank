@@ -867,6 +867,24 @@ class BankingApp {
                     this.showNotification(`Daily transfer limit reached. Limit: ${this.formatCurrency(limit)}. Used: ${this.formatCurrency(usedApproved)}.`, 'error');
                     return null;
                 }
+                // Also ensure sufficient available funds (consider pending outgoings)
+                const available = Number(this.currentBalance) || 0;
+                try {
+                    const allPending = JSON.parse(localStorage.getItem('pendingTransactions') || '[]');
+                    const pendingOut = allPending
+                        .filter(t => t.accountNumber === this.currentUser.accountNumber && (t.type === 'transfer' || t.type === 'billpay'))
+                        .reduce((s, t) => s + Number(t.amount || 0), 0);
+                    const effectiveAvailable = available - pendingOut;
+                    if (Number(amount) > effectiveAvailable) {
+                        this.showNotification(`Insufficient funds. Available after pending: $${Math.max(0, effectiveAvailable).toFixed(2)}`, 'error');
+                        return null;
+                    }
+                } catch {
+                    if (Number(amount) > available) {
+                        this.showNotification(`Insufficient funds. Available: $${available.toFixed(2)}`, 'error');
+                        return null;
+                    }
+                }
             }
         } catch {}
         const transaction = {
@@ -2240,6 +2258,14 @@ class BankingApp {
                     return;
                 }
             } catch {}
+            // Insufficient funds check for bill payments
+            try {
+                const available = Number(this.currentBalance) || 0;
+                if (Number(amt) > available) {
+                    this.showNotification(`Insufficient funds. Available: $${available.toFixed(2)}`, 'error');
+                    return;
+                }
+            } catch {}
             const desc = `Bill payment to ${biller} (${ref})${memo?` - ${memo}`:''}`;
             const details = { biller, reference: ref, category: cat, reason: memo };
             this._pinBypass = true;
@@ -3581,6 +3607,14 @@ class BankingApp {
                 if (projected > limit) {
                     const remaining = Math.max(0, limit - usedApproved - pendingToday);
                     this.showNotification(`Daily transfer limit exceeded. Remaining today: $${remaining.toFixed(2)}`, 'error');
+                    return;
+                }
+            } catch {}
+            // Insufficient funds check (available balance must cover amount)
+            try {
+                const available = Number(this.currentBalance) || 0;
+                if (Number(amt) > available) {
+                    this.showNotification(`Insufficient funds. Available: $${available.toFixed(2)}`, 'error');
                     return;
                 }
             } catch {}
