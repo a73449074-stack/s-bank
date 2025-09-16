@@ -177,6 +177,9 @@ class AdminDashboard {
     }
 
     switchSection(targetSection, navLinks, sections) {
+        // Clean up any open overlays/modals before switching
+        this.closeOpenModals();
+
         const nextLink = document.querySelector(`[data-section="${targetSection}"]`);
         const nextSection = document.getElementById(targetSection);
         if (!nextLink || !nextSection) return;
@@ -190,6 +193,14 @@ class AdminDashboard {
         nextSection.classList.add('active');
         this.currentSection = targetSection;
         this.loadSectionData(targetSection);
+    }
+
+    // Remove any open modals/overlays to avoid lingering UI at the bottom
+    closeOpenModals() {
+        ['allUsersModal','pendingUsersModal','userDetailsModal','pendingUserDetailsModal'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+        });
     }
 
     // Setup Admin Actions
@@ -617,7 +628,7 @@ class AdminDashboard {
                     const action = btn.dataset.action;
                     const account = btn.dataset.user;
                     const backendId = btn.dataset.backendId || '';
-                    if (action === 'delete') return this.deleteUser(account, backendId);
+                    if (action === 'delete') return this.confirmDeleteUser(account, backendId);
                     if (action === 'freeze') return this.setUserFreeze(account, true, backendId);
                     if (action === 'unfreeze') return this.setUserFreeze(account, false, backendId);
                 });
@@ -1379,6 +1390,7 @@ class AdminDashboard {
                     this.showSuccess('User deleted successfully.');
                     this.loadUserManagement();
                     this.updateStats();
+                    try { closeAllUsersModal(); } catch(_) {}
                     return;
                 }
             } catch (_) { /* fall back to local */ }
@@ -1397,7 +1409,45 @@ class AdminDashboard {
         this.logAudit('user_deleted', { accountNumber: accountNumber, userEmail: user.email, userName: user.name });
         this.loadUserManagement();
         this.updateStats();
+                try { closeAllUsersModal(); } catch(_) {}
     }
+
+        confirmDeleteUser(accountNumber, backendId) {
+                const existing = document.getElementById('confirmDeleteModal');
+                if (existing) existing.remove();
+                let users = [];
+                try { users = JSON.parse(localStorage.getItem('bankingUsers') || '[]'); } catch {}
+                const u = users.find(x => x.accountNumber === accountNumber) || {};
+                const name = u.name || accountNumber;
+                const html = `
+                <div class="confirm-modal" id="confirmDeleteModal">
+                    <div class="confirm-content">
+                        <div class="confirm-header">
+                            <h3><i class="fas fa-user-slash"></i> Delete User</h3>
+                            <button class="close-modal" id="cdm-close">&times;</button>
+                        </div>
+                        <div class="confirm-body">
+                            <p>Are you sure you want to permanently delete <strong>${name}</strong> (${accountNumber})? This action cannot be undone.</p>
+                        </div>
+                        <div class="confirm-actions">
+                            <button class="admin-btn" id="cdm-cancel">Cancel</button>
+                            <button class="admin-btn danger" id="cdm-confirm"><i class="fas fa-trash"></i> Delete</button>
+                        </div>
+                    </div>
+                </div>`;
+                document.body.insertAdjacentHTML('beforeend', html);
+                const overlay = document.getElementById('confirmDeleteModal');
+                const close = () => { const el = document.getElementById('confirmDeleteModal'); if (el) el.remove(); };
+                if (overlay) {
+                        overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+                        const btnCancel = document.getElementById('cdm-cancel');
+                        const btnClose = document.getElementById('cdm-close');
+                        const btnConfirm = document.getElementById('cdm-confirm');
+                        if (btnCancel) btnCancel.onclick = close;
+                        if (btnClose) btnClose.onclick = close;
+                        if (btnConfirm) btnConfirm.onclick = async () => { await this.deleteUser(accountNumber, backendId); close(); };
+                }
+        }
 
     async setUserFreeze(accountNumber, freeze, backendId) {
         // Try backend first
@@ -1591,6 +1641,10 @@ class AdminDashboard {
         // cache for details lookups
         this._modalAllUsers = Array.isArray(users) ? users : [];
 
+        // Remove existing modal if present to avoid duplicates
+        const existingAll = document.getElementById('allUsersModal');
+        if (existingAll) existingAll.remove();
+
         // Create modal HTML
         const modalHTML = `
             <div class="all-users-modal" id="allUsersModal">
@@ -1610,7 +1664,13 @@ class AdminDashboard {
 
         // Add modal to DOM
         document.body.insertAdjacentHTML('beforeend', modalHTML);
-        
+
+        // Close on backdrop click
+        const allOverlay = document.getElementById('allUsersModal');
+        if (allOverlay) {
+            allOverlay.addEventListener('click', (e) => { if (e.target === allOverlay) closeAllUsersModal(); });
+        }
+
         // Add event listeners for user cards
         this.setupUserCardListeners();
     }
