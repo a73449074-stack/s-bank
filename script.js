@@ -290,6 +290,9 @@ class BankingApp {
             case 'find-atm':
                 this.startATMDeposit();
                 break;
+            case 'card-deposit':
+                this.startCardDeposit();
+                break;
             case 'wire-transfer':
                 this.startWireTransfer();
                 break;
@@ -308,6 +311,10 @@ class BankingApp {
 
     startATMDeposit() {
         this.showDepositWizard('ATM Cash Deposit', 'atm-deposit');
+    }
+
+    startCardDeposit() {
+        this.showDepositWizard('Card Deposit', 'card-deposit');
     }
 
     startWireTransfer() {
@@ -358,9 +365,9 @@ class BankingApp {
                                     <span id="summary-amount">$0.00</span>
                                 </div>
                                 <div class="summary-row">
-                                    <span>Deposit Type:</span>
-                                    <span id="summary-type">${title}</span>
-                                </div>
+                                            <span>Deposit Type:</span>
+                                            <span id="summary-type">${title}</span>
+                                        </div>
                                 <div class="summary-row">
                                     <span>Account:</span>
                                     <span>Everyday Checking ...0630</span>
@@ -368,9 +375,12 @@ class BankingApp {
                                 ${type === 'atm-deposit' ? `
                                 <div class="summary-row"><span>ATM:</span><span id="summary-atm-name">—</span></div>
                                 <div class="summary-row"><span>ATM ID:</span><span id="summary-atm-id">—</span></div>
-                                <div class="summary-row"><span>Password:</span>
-                                    <span><input type="password" id="atm-password" placeholder="Enter your account password"></span>
+                                <div class="summary-row"><span>PIN:</span>
+                                    <span><input type="password" id="atm-pin" placeholder="Enter your 4-digit transaction PIN" maxlength="4" inputmode="numeric"></span>
                                 </div>` : ''}
+                                ${type === 'card-deposit' ? `
+                                <div class="summary-row"><span>Card:</span><span id="summary-card-name">—</span></div>
+                                <div class="summary-row"><span>Card Number:</span><span id="summary-card-last4">—</span></div>` : ''}
                                 ${type === 'wire-transfer' ? `
                                 <div class="summary-row"><span>Sender:</span><span id="summary-wire-sender">—</span></div>
                                 <div class="summary-row"><span>Bank:</span><span id="summary-wire-bank">—</span></div>
@@ -411,10 +421,11 @@ class BankingApp {
         let currentStep = 1;
         let depositAmount = 0;
         let selectedATM = null;
-        let checkFront = null;
+    let checkFront = null;
         let checkBack = null;
         let checkNumber = '';
         let wireDetails = { senderName: '', bankName: '', senderAccount: '', reference: '' };
+    let selectedCardIndex = null;
         
         const wizard = document.getElementById('deposit-wizard');
         const backBtn = document.getElementById('back-btn');
@@ -422,6 +433,10 @@ class BankingApp {
         const submitBtn = document.getElementById('submit-btn');
         const amountInput = document.getElementById('deposit-amount');
         const summaryAmount = document.getElementById('summary-amount');
+
+        if (depositType === 'atm-deposit') {
+            submitBtn.innerHTML = '<i class="fas fa-check"></i> Confirm Deposit';
+        }
         
         // Close wizard
         wizard.querySelector('.close-wizard').addEventListener('click', () => {
@@ -488,6 +503,40 @@ class BankingApp {
             if (numIn) numIn.oninput = updateNum;
         }
 
+        if (depositType === 'card-deposit') {
+            const cards = this.loadUserCards();
+            const listEl = wizard.querySelector('#card-list');
+            if (listEl) {
+                if (!cards || cards.length === 0) {
+                    listEl.innerHTML = `<div class="empty-cards">No linked cards. <button class="link-card-btn" id="link-card-inline">Link a card</button></div>`;
+                    const linkBtn = wizard.querySelector('#link-card-inline');
+                    if (linkBtn) linkBtn.addEventListener('click', () => this.showCardControls());
+                } else {
+                    listEl.innerHTML = cards.map((c, idx) => {
+                        const last4 = (c.cardNumber||'').replace(/\s+/g,'').slice(-4);
+                        return `
+                        <label class="atm-item">
+                            <input type="radio" name="cardSel" value="${idx}" data-name="${c.name}" data-last4="${last4}">
+                            <div class="atm-meta">
+                                <strong>${c.name || c.cardType || 'Card'}</strong>
+                                <span>${c.cardType || ''} • •••• ${last4}</span>
+                            </div>
+                            <span class="atm-id">${c.expiry || ''}</span>
+                        </label>`;
+                    }).join('');
+                    listEl.querySelectorAll('input[name="cardSel"]').forEach(inp => {
+                        inp.addEventListener('change', () => {
+                            selectedCardIndex = Number(inp.value);
+                            const sumName = wizard.querySelector('#summary-card-name');
+                            const sumLast4 = wizard.querySelector('#summary-card-last4');
+                            if (sumName) sumName.textContent = inp.dataset.name || 'Card';
+                            if (sumLast4) sumLast4.textContent = `•••• ${inp.dataset.last4}`;
+                        });
+                    });
+                }
+            }
+        }
+
         if (depositType === 'wire-transfer') {
             const senderIn = wizard.querySelector('#wire-sender');
             const bankIn = wizard.querySelector('#wire-bank');
@@ -521,7 +570,7 @@ class BankingApp {
         });
         
         nextBtn.addEventListener('click', () => {
-            if (this.validateCurrentStep(currentStep, depositAmount, depositType, { selectedATM, checkFront, checkBack, checkNumber, wireDetails })) {
+            if (this.validateCurrentStep(currentStep, depositAmount, depositType, { selectedATM, checkFront, checkBack, checkNumber, wireDetails, selectedCardIndex })) {
                 if (currentStep < 3) {
                     currentStep++;
                     this.updateWizardStep(currentStep);
@@ -531,20 +580,34 @@ class BankingApp {
         
         submitBtn.addEventListener('click', () => {
             if (depositAmount > 0) {
-                // ATM password check if ATM deposit
+                // For ATM deposits, require typed 4-digit transaction PIN matching stored PIN
                 if (depositType === 'atm-deposit') {
-                    const pwdInput = wizard.querySelector('#atm-password');
-                    const pwd = (pwdInput && pwdInput.value) || '';
-                    const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-                    const user = users.find(u => u.email === this.currentUser.email || u.accountNumber === this.currentUser.accountNumber);
-                    if (!pwd || !user || String(pwd) !== String(user.password || '')) {
-                        this.showNotification('Incorrect account password.', 'error');
-                        return;
-                    }
+                    const pinEl = wizard.querySelector('#atm-pin');
+                    const typed = (pinEl && pinEl.value) ? String(pinEl.value).replace(/[^\d]/g,'').slice(0,4) : '';
+                    if (typed.length !== 4) { this.showNotification('Please enter a 4-digit PIN', 'error'); return; }
+                    try {
+                        const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+                        const user = users.find(u => u.email === this.currentUser.email || u.accountNumber === this.currentUser.accountNumber);
+                        const pin = user && user.pin;
+                        const userSet = !!(user && user.pinSetByUser);
+                        if (!pin || !userSet) { this.showSecuritySettingsModal(); return; }
+                        if (String(typed) !== String(pin)) { this.showNotification('Incorrect PIN.', 'error'); return; }
+                    } catch { this.showNotification('Unable to verify PIN', 'error'); return; }
+                }
+                // For Card deposits, require normal PIN confirmation
+                if (depositType === 'card-deposit') {
+                    if (!this.promptForPinConfirmation()) { this.showNotification('Transaction cancelled.', 'error'); return; }
                 }
                 // Create pending transaction with details by type
                 let details = null;
                 if (depositType === 'atm-deposit') { details = { atmId: selectedATM?.id, atmName: selectedATM?.name }; }
+                if (depositType === 'card-deposit') {
+                    const cards = this.loadUserCards();
+                    const card = (selectedCardIndex!=null) ? cards[selectedCardIndex] : null;
+                    if (!card) { this.showNotification('Please select a card', 'error'); return; }
+                    const last4 = (card.cardNumber||'').replace(/\s+/g,'').slice(-4);
+                    details = { cardName: card.name || card.cardType || 'Card', last4, cardType: card.cardType || '' };
+                }
                 if (depositType === 'mobile-check') { details = { checkNumber: checkNumber || '', frontUploaded: !!checkFront, backUploaded: !!checkBack }; }
                 if (depositType === 'wire-transfer') { details = { ...wireDetails }; }
                 const transaction = this.createPendingTransaction('deposit', depositAmount, `${depositType} - $${depositAmount.toFixed(2)}`, depositType, details);
@@ -570,6 +633,9 @@ class BankingApp {
             case 2:
                 if (type === 'atm-deposit') {
                     if (!ctx.selectedATM) { this.showNotification('Please select an ATM', 'error'); return false; }
+                }
+                if (type === 'card-deposit') {
+                    if (ctx.selectedCardIndex == null) { this.showNotification('Please select a linked card', 'error'); return false; }
                 }
                 if (type === 'mobile-check') {
                     if (!ctx.checkFront || !ctx.checkBack) { this.showNotification('Please upload front and back images of the check', 'error'); return false; }
@@ -600,6 +666,20 @@ class BankingApp {
                     <button class="btn-outline" id="atm-refresh"><i class="fas fa-sync"></i> Refresh</button>
                 </div>
                 <div id="atm-list" class="atm-list"></div>
+            </div>`;
+        }
+        if (type === 'card-deposit') {
+            return `
+            <div class="step-header">
+                <h4>Step 2: Choose Card</h4>
+                <p>Select one of your linked cards</p>
+            </div>
+            <div class="atm-finder">
+                <div class="row" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <span>Linked Cards</span>
+                    <button class="btn-outline" id="atm-refresh" disabled><i class="fas fa-credit-card"></i> Cards</button>
+                </div>
+                <div id="card-list" class="atm-list"></div>
             </div>`;
         }
         if (type === 'mobile-check') {
@@ -4606,18 +4686,20 @@ class BankingApp {
         const description = (transactionElement.querySelector('.transaction-main')?.textContent || transactionElement.querySelector('.transaction-description')?.textContent || '').trim();
         const amountText = (transactionElement.querySelector('.transaction-amount')?.textContent || '').trim();
         const date = (transactionElement.querySelector('.transaction-date')?.textContent || '').trim();
-        const statusEl = transactionElement.querySelector('.transaction-status span');
-        const statusText = statusEl ? statusEl.textContent : 'Approved';
-        const statusClass = (transactionElement.className.match(/pending|approved|declined/)||['approved'])[0];
-    const method = transactionElement.getAttribute('data-method') || (description.toLowerCase().includes('wire') ? 'wire' : description.toLowerCase().includes('zelle') ? 'zelle' : description.toLowerCase().includes('ach') ? 'ach' : description.toLowerCase().includes('check') ? 'check' : description.toLowerCase().includes('bill') ? 'billpay' : 'standard');
-        // Try to retrieve full transaction details by id for richer fields
+        const fallbackStatusClass = (transactionElement.className.match(/pending|approved|declined/)||['approved'])[0];
+        const method = transactionElement.getAttribute('data-method') || (description.toLowerCase().includes('wire') ? 'wire' : description.toLowerCase().includes('zelle') ? 'zelle' : description.toLowerCase().includes('ach') ? 'ach' : description.toLowerCase().includes('check') ? 'check' : description.toLowerCase().includes('bill') ? 'billpay' : 'standard');
+        // Try to retrieve full transaction details by id for richer fields and freshest status
         const txId = transactionElement.getAttribute('data-txid');
-        let txDetails = null;
+        let txDetails = null; let txStatus = fallbackStatusClass; let declineReason = '';
         try {
             const userTransactionKey = this.getUserTransactionKey();
             const userTransactions = JSON.parse(localStorage.getItem(userTransactionKey) || '[]');
             const tx = userTransactions.find(t => String(t.id) === String(txId));
-            txDetails = tx && tx.details ? tx.details : null;
+            if (tx) {
+                txDetails = tx.details || null;
+                txStatus = tx.status || fallbackStatusClass;
+                declineReason = tx.declineReason || '';
+            }
         } catch {}
 
         // Determine amounts
@@ -4638,6 +4720,12 @@ class BankingApp {
 
         const overlay = document.createElement('div');
         overlay.className = 'receipt-overlay';
+        const statusMap = {
+            approved: { cls: 'status-success', text: 'Payment successful' },
+            pending: { cls: 'status-processing', text: 'Pending approval' },
+            declined: { cls: 'status-declined', text: 'Payment declined' }
+        };
+        const si = statusMap[txStatus] || statusMap.pending;
         overlay.innerHTML = `
             <div class="receipt-modal" role="dialog" aria-modal="true">
                 <div class="receipt-header">
@@ -4645,9 +4733,7 @@ class BankingApp {
                     <button class="receipt-close" aria-label="Close">&times;</button>
                 </div>
                 <div class="receipt-body" id="receipt-capture">
-                    <div class="receipt-status status-success"><span class="dot"></span> Payment successful</div>
-                    <div class="receipt-status status-processing"><span class="dot"></span> Processing by bank</div>
-                    <div class="receipt-status status-received"><span class="dot"></span> Received by bank</div>
+                    <div class="receipt-status ${si.cls}"><span class="dot"></span> ${si.text}</div>
 
                     <div class="receipt-section">
                         <div class="receipt-row"><strong>Amount:</strong><span>$${amountAbs.toFixed(2)}</span></div>
@@ -4657,6 +4743,7 @@ class BankingApp {
 
                     <div class="receipt-section">
                         <h5>Transaction details</h5>
+                        <div class="receipt-row"><strong>Status:</strong><span>${si.text}</span></div>
                         <div class="receipt-row"><strong>Type:</strong><span>${paymentMethod}</span></div>
                         <div class="receipt-row"><strong>Recipient:</strong><span>${txDetails?.name || recipient}</span></div>
                         ${txDetails?.bank ? `<div class="receipt-row"><strong>Bank:</strong><span>${txDetails.bank}</span></div>` : ''}
@@ -4667,7 +4754,8 @@ class BankingApp {
                         ${txDetails?.wireCode ? `<div class="receipt-row"><strong>SWIFT/IBAN:</strong><span>${txDetails.wireCode}</span></div>` : ''}
                         ${txDetails?.routing ? `<div class="receipt-row"><strong>Routing:</strong><span>${txDetails.routing}</span></div>` : ''}
                         ${txDetails?.mailing ? `<div class="receipt-row"><strong>Mailing:</strong><span>${txDetails.mailing}</span></div>` : ''}
-                        <div class="receipt-row"><strong>Note:</strong><span>${txDetails?.reason || note}</span></div>
+                        ${txStatus==='declined' && declineReason ? `<div class="receipt-row"><strong>Decline reason:</strong><span>${this.escapeHtml(declineReason)}</span></div>` : ''}
+                        <div class="receipt-row"><strong>Note:</strong><span>${this.escapeHtml(txDetails?.reason || note)}</span></div>
                         <div class="receipt-row"><strong>Transaction number:</strong><span>${txNumber}</span></div>
                         <div class="receipt-row"><strong>Transaction date:</strong><span>${date || new Date().toLocaleString()}</span></div>
                         <div class="receipt-row"><strong>Section id:</strong><span>${sectionId}</span></div>
