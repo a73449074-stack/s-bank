@@ -85,21 +85,31 @@ class AdminDashboard {
         const navLinks = document.querySelectorAll('.nav-link');
         const sections = document.querySelectorAll('.admin-section');
 
+        // Use a shared closeMenu function for consistency
+        const closeMenu = () => {
+            const sidebar = document.getElementById('adminSidebar');
+            const burger = document.querySelector('.hamburger-btn');
+            const backdrop = document.querySelector('.sidebar-backdrop');
+            if (sidebar) {
+                sidebar.classList.remove('open');
+                sidebar.setAttribute('aria-hidden', 'true');
+                sidebar.style.left = window.innerWidth <= 900 ? '-300px' : '';
+            }
+            if (burger) {
+                burger.setAttribute('aria-expanded', 'false');
+                burger.classList.remove('is-open');
+            }
+            if (backdrop) backdrop.hidden = true;
+            document.body.style.overflow = '';
+        };
+
         navLinks.forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
                 const targetSection = link.dataset.section;
                 this.switchSection(targetSection, navLinks, sections);
-                // Close sidebar on mobile after navigation
-                const sidebar = document.getElementById('adminSidebar');
-                const backdrop = document.querySelector('.sidebar-backdrop');
-                if (sidebar && sidebar.classList.contains('open')) {
-                    sidebar.classList.remove('open');
-                    sidebar.setAttribute('aria-hidden', 'true');
-                    const burger = document.querySelector('.hamburger-btn');
-                    if (burger) burger.setAttribute('aria-expanded', 'false');
-                    if (backdrop) backdrop.hidden = true;
-                }
+                // Always close sidebar after navigation (mobile)
+                closeMenu();
             });
         });
     }
@@ -194,8 +204,8 @@ class AdminDashboard {
 
         // Notification and profile buttons removed from header
 
-    // Total Users card click - show all users
-    const totalUsersCard = document.querySelector('.stats-grid .stat-card:nth-child(1)');
+        // Total Users card click - show all users
+        const totalUsersCard = document.querySelector('.stats-grid .stat-card:nth-child(1)');
         if (totalUsersCard) {
             totalUsersCard.style.cursor = 'pointer';
             totalUsersCard.classList.add('clickable');
@@ -204,8 +214,8 @@ class AdminDashboard {
             });
         }
 
-    // Pending Users card click - show pending users
-    const pendingUsersCard = document.querySelector('.stats-grid .stat-card:nth-child(2)');
+        // Pending Users card click - show pending users
+        const pendingUsersCard = document.querySelector('.stats-grid .stat-card:nth-child(2)');
         if (pendingUsersCard) {
             pendingUsersCard.style.cursor = 'pointer';
             pendingUsersCard.classList.add('clickable');
@@ -220,6 +230,43 @@ class AdminDashboard {
             pendingTxCard.style.cursor = 'pointer';
             pendingTxCard.classList.add('clickable');
             pendingTxCard.addEventListener('click', () => {
+                this.switchSection('transactions', 
+                    document.querySelectorAll('.nav-link'),
+                    document.querySelectorAll('.admin-section'));
+            });
+        }
+
+        // Active Accounts card (3rd) -> Users tab filtered to active
+        const activeAccountsCard = document.querySelector('.stats-grid .stat-card:nth-child(3)');
+        if (activeAccountsCard) {
+            activeAccountsCard.style.cursor = 'pointer';
+            activeAccountsCard.classList.add('clickable');
+            activeAccountsCard.addEventListener('click', () => {
+                this.switchSection('users', 
+                    document.querySelectorAll('.nav-link'),
+                    document.querySelectorAll('.admin-section'));
+                // optional: future filter hook here if a filter UI exists
+            });
+        }
+
+        // Total Balance card (4th) -> Accounts tab (account overview)
+        const totalBalanceCard = document.querySelector('.stats-grid .stat-card:nth-child(4)');
+        if (totalBalanceCard) {
+            totalBalanceCard.style.cursor = 'pointer';
+            totalBalanceCard.classList.add('clickable');
+            totalBalanceCard.addEventListener('click', () => {
+                this.switchSection('accounts', 
+                    document.querySelectorAll('.nav-link'),
+                    document.querySelectorAll('.admin-section'));
+            });
+        }
+
+        // Transactions Today card (5th) -> Transactions tab
+        const todayTxCard = document.querySelector('.stats-grid .stat-card:nth-child(5)');
+        if (todayTxCard) {
+            todayTxCard.style.cursor = 'pointer';
+            todayTxCard.classList.add('clickable');
+            todayTxCard.addEventListener('click', () => {
                 this.switchSection('transactions', 
                     document.querySelectorAll('.nav-link'),
                     document.querySelectorAll('.admin-section'));
@@ -404,90 +451,75 @@ class AdminDashboard {
         }
     }
 
-    loadRecentTransactions() {
-        const transactionList = document.querySelector('.transaction-list');
-        if (!transactionList) return;
-        const logs = this.getAuditStore();
-        const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-        const recent = logs
-            .filter(l => l.eventType === 'transaction_approved' || l.eventType === 'transaction_declined')
-            .slice(0, 7);
+    async loadAccountManagement() {
+        const select = document.getElementById('account-user-select');
+        const refreshBtn = document.getElementById('refresh-accounts');
+        if (!select) return;
 
-        if (!recent.length) {
-            transactionList.innerHTML = `
-                <div class="empty-pending" style="padding: 10px 0;">
-                    <i class="fas fa-inbox"></i>
-                    <h4>No recent approvals/declines</h4>
-                    <p>Approved or declined transactions will appear here.</p>
-                </div>`;
-            return;
+        const prev = select.value;
+        let users = [];
+        let loadedFrom = 'local';
+
+        // Backend-first
+        if (this.apiBase) {
+            try {
+                const r = await fetch(`${this.apiBase}/api/users`);
+                if (r.ok) {
+                    const apiUsers = await r.json();
+                    if (Array.isArray(apiUsers) && apiUsers.length) {
+                        users = apiUsers;
+                        loadedFrom = 'server';
+                    }
+                }
+            } catch (_) { /* fallback to local */ }
         }
 
-        const getUser = (tgt) => users.find(u => (tgt.userEmail && u.email === tgt.userEmail) || (tgt.accountNumber && u.accountNumber === tgt.accountNumber));
-        const initials = (nameOrEmail) => {
-            const s = (nameOrEmail || '').trim();
-            if (!s) return '—';
-            if (s.includes(' ')) return s.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase();
-            if (s.includes('@')) return s[0].toUpperCase();
-            return s.substring(0,2).toUpperCase();
+        // Fallback to local
+        if (!users.length) {
+            try { users = JSON.parse(localStorage.getItem('bankingUsers') || '[]'); } catch { users = []; }
+        }
+
+        // Cache for render/use across handlers
+        this._accountUsers = Array.isArray(users) ? users : [];
+
+        // Populate select
+        select.innerHTML = this._accountUsers.map(u => `<option value="${u.accountNumber}">${u.name} (${u.accountNumber})</option>`).join('');
+        if (prev && this._accountUsers.some(u => u.accountNumber === prev)) select.value = prev;
+
+        const render = () => {
+            const acct = select.value;
+            const list = Array.isArray(this._accountUsers) ? this._accountUsers : [];
+            const user = list.find(u => u.accountNumber === acct);
+            const details = document.getElementById('am-user-details');
+            if (!user || !details) return;
+            const balanceKey = `userBalance_${user.accountNumber}`;
+            const localBal = parseFloat(localStorage.getItem(balanceKey) || '0');
+            const apiBal = Number(user.balance);
+            const bal = Number.isFinite(apiBal) && apiBal > 0 ? apiBal : localBal;
+            details.querySelector('[data-field="name"]').textContent = user.name || '';
+            details.querySelector('[data-field="email"]').textContent = user.email || '';
+            details.querySelector('[data-field="accountNumber"]').textContent = user.accountNumber || '';
+            details.querySelector('[data-field="status"]').textContent = user.status || 'active';
+            details.querySelector('[data-field="accountType"]').textContent = user.accountType || 'checking';
+            details.querySelector('[data-field="phone"]').textContent = user.phone || '';
+            details.querySelector('[data-field="balance"]').textContent = `$${(Number(bal)||0).toFixed(2)}`;
+
+            // Prefill edit fields
+            const typeSel = document.getElementById('am-account-type');
+            const phoneIn = document.getElementById('am-phone');
+            if (typeSel) typeSel.value = (user.accountType || 'checking');
+            if (phoneIn) phoneIn.value = user.phone || '';
+
+            // Adjust freeze toggle label
+            const freezeBtn = document.getElementById('am-freeze-toggle');
+            if (freezeBtn) freezeBtn.innerHTML = `<i class="fas fa-snowflake"></i> ${user.status === 'frozen' ? 'Unfreeze' : 'Freeze'} Account`;
         };
 
-        const rows = recent.map(l => {
-            const tgt = l.target || {};
-            const meta = l.meta || {};
-            const u = getUser(tgt) || {};
-            const displayName = u.name || tgt.userEmail || tgt.accountNumber || 'User';
-            const amountNum = Number(meta.amount || 0);
-            const isDeposit = String(meta.type).toLowerCase() === 'deposit';
-            const amtPrefix = isDeposit ? '+' : '-';
-            const amtClass = l.eventType === 'transaction_approved' ? (isDeposit ? 'positive' : 'negative') : 'declined';
-            const timeText = new Date(l.timestamp).toLocaleString();
-            return `
-                <div class="transaction-item">
-                    <div class="transaction-user">
-                        <div class="user-avatar">${initials(u.name || tgt.userEmail || '')}</div>
-                        <div class="user-info">
-                            <span class="user-name">${displayName}</span>
-                            <span class="transaction-time">${timeText}</span>
-                        </div>
-                    </div>
-                    <div class="transaction-amount ${amtClass}">${amtPrefix}$${amountNum.toFixed(2)}</div>
-                </div>`;
-        }).join('');
+        select.onchange = render;
+        if (refreshBtn) refreshBtn.onclick = () => this.loadAccountManagement();
+        render();
 
-        transactionList.innerHTML = rows;
-
-        // Try overlay with backend audit logs
-        if (this.apiBase) {
-            fetch(`${this.apiBase}/api/audit`).then(r => r.ok ? r.json() : null).then(apiLogs => {
-                if (!Array.isArray(apiLogs) || !apiLogs.length) return;
-                const recentApi = apiLogs
-                    .filter(l => l.eventType === 'transaction_approved' || l.eventType === 'transaction_declined')
-                    .slice(0,7);
-                if (!recentApi.length) return;
-                const rows = recentApi.map(l => {
-                    const amountNum = Number(l.amount || 0);
-                    const isDeposit = String(l.type||'').toLowerCase() === 'deposit';
-                    const amtPrefix = isDeposit ? '+' : '-';
-                    const amtClass = l.eventType === 'transaction_approved' ? (isDeposit ? 'positive' : 'negative') : 'declined';
-                    const timeText = new Date(l.timestamp).toLocaleString();
-                    const displayName = l.userName || l.accountNumber || l.userEmail || 'User';
-                    const initials = (displayName||'U').toString().trim().split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase();
-                    return `
-                        <div class="transaction-item">
-                            <div class="transaction-user">
-                                <div class="user-avatar">${initials}</div>
-                                <div class="user-info">
-                                    <span class="user-name">${displayName}</span>
-                                    <span class="transaction-time">${timeText}</span>
-                                </div>
-                            </div>
-                            <div class="transaction-amount ${amtClass}">${amtPrefix}$${amountNum.toFixed(2)}</div>
-                        </div>`;
-                }).join('');
-                transactionList.innerHTML = rows;
-            }).catch(()=>{});
-        }
+        this.showNotification(`Account management loaded from ${loadedFrom}`);
     }
 
     updateSystemStatus() {
