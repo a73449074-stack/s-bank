@@ -870,19 +870,39 @@ class AdminDashboard {
         const refreshBtn = document.getElementById('refresh-accounts');
         if (!select) return;
 
-        const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-        select.innerHTML = users.map(u => `<option value="${u.accountNumber}">${u.name} (${u.accountNumber})</option>`).join('');
+        const normalizeAcct = (u) => String(u.accountNumber||u.account_number||u.accountNo||u.accNumber||u.acct||u.number||u.account||'');
+        const loadUsers = async () => {
+            let users = [];
+            if (this.apiBase) {
+                try { const r = await fetch(`${this.apiBase}/api/users`); if (r.ok) users = await r.json(); } catch {}
+            }
+            if (!Array.isArray(users) || users.length===0) {
+                try { users = JSON.parse(localStorage.getItem('bankingUsers') || '[]'); } catch { users = []; }
+            }
+            return (users||[]).filter(u => (u.status||'active')!=='pending');
+        };
+
+        // Keep a local closure var for current users list
+        let users = [];
+        const populateSelect = async () => {
+            users = await loadUsers();
+            select.innerHTML = users.map(u => `<option value="${normalizeAcct(u)}">${u.name || u.email} (${normalizeAcct(u)})</option>`).join('');
+        };
+        
+        // initial populate
+        // eslint-disable-next-line no-void
+        void populateSelect();
 
         const render = () => {
             const acct = select.value;
-            const user = users.find(u => u.accountNumber === acct);
+            const user = users.find(u => normalizeAcct(u) === acct);
             const details = document.getElementById('am-user-details');
             if (!user || !details) return;
-            const balanceKey = `userBalance_${user.accountNumber}`;
+            const balanceKey = `userBalance_${normalizeAcct(user)}`;
             const bal = parseFloat(localStorage.getItem(balanceKey) || '0');
             details.querySelector('[data-field="name"]').textContent = user.name;
             details.querySelector('[data-field="email"]').textContent = user.email;
-            details.querySelector('[data-field="accountNumber"]').textContent = user.accountNumber;
+            details.querySelector('[data-field="accountNumber"]').textContent = normalizeAcct(user);
             details.querySelector('[data-field="status"]').textContent = user.status || 'active';
             details.querySelector('[data-field="accountType"]').textContent = user.accountType || 'checking';
             details.querySelector('[data-field="phone"]').textContent = user.phone || '';
@@ -900,7 +920,7 @@ class AdminDashboard {
         };
 
         select.onchange = render;
-        if (refreshBtn) refreshBtn.onclick = () => this.loadAccountManagement();
+    if (refreshBtn) refreshBtn.onclick = () => this.loadAccountManagement();
         render();
 
         // Wire actions
@@ -928,13 +948,24 @@ class AdminDashboard {
             this.showSuccess('Account unlocked'); render();
             this.logAudit('user_unlocked', { accountNumber: acct, userEmail: users[i].email, userName: users[i].name });
         });
-        action('am-freeze-toggle', () => {
-            const acct = select.value; const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-            const i = users.findIndex(u => u.accountNumber === acct); if (i === -1) return;
-            users[i].status = users[i].status === 'frozen' ? 'active' : 'frozen';
-            localStorage.setItem('bankingUsers', JSON.stringify(users));
-            this.showSuccess(users[i].status === 'frozen' ? 'Account frozen' : 'Account unfrozen'); render();
-            this.logAudit(users[i].status === 'frozen' ? 'user_frozen' : 'user_unfrozen', { accountNumber: acct, userEmail: users[i].email, userName: users[i].name });
+        action('am-freeze-toggle', async () => {
+            const acct = select.value;
+            const u = users.find(x => normalizeAcct(x)===acct);
+            if (!u) return;
+            const id = u._id || u.backendId || '';
+            await this.setUserFreeze(acct, !(String(u.status||'active')==='active'), id, u.email, users.indexOf(u));
+            // Reload users and re-render to reflect updated status
+            await populateSelect();
+            render();
+        });
+        action('am-delete-user', async () => {
+            const acct = select.value;
+            const u = users.find(x => normalizeAcct(x)===acct);
+            if (!u) return;
+            const id = u._id || u.backendId || '';
+            await this.confirmDeleteUser(acct, id, u.email, users.indexOf(u));
+            await populateSelect();
+            render();
         });
         action('am-force-logout', () => {
             // Clear any session belonging to this user
