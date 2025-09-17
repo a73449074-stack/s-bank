@@ -283,13 +283,13 @@ class AdminDashboard {
             });
         }
 
-        // Active Accounts card (3rd) -> Users tab filtered to active
+        // Active Accounts card (3rd) -> User Control
         const activeAccountsCard = document.querySelector('.stats-grid .stat-card:nth-child(3)');
         if (activeAccountsCard) {
             activeAccountsCard.style.cursor = 'pointer';
             activeAccountsCard.classList.add('clickable');
             activeAccountsCard.addEventListener('click', () => {
-                this.switchSection('users', 
+                this.switchSection('user-control', 
                     document.querySelectorAll('.nav-link'),
                     document.querySelectorAll('.admin-section'));
                 // optional: future filter hook here if a filter UI exists
@@ -592,8 +592,11 @@ class AdminDashboard {
     // Load Section-Specific Data
     loadSectionData(section) {
         switch (section) {
-            case 'users':
-                this.loadUserManagement();
+            case 'users': // legacy id; route to new control
+                this.loadUserControl();
+                break;
+            case 'user-control':
+                this.loadUserControl();
                 break;
             case 'accounts':
                 this.loadAccountManagement();
@@ -611,6 +614,89 @@ class AdminDashboard {
                 this.loadSystemSettings();
                 break;
         }
+    }
+
+    async loadUserControl() {
+        const tbody = document.getElementById('uc-table-body');
+        const refresh = document.getElementById('uc-refresh');
+        if (!tbody) return;
+
+        const normalizeAcct = (u) => String(u.accountNumber || u.account_number || u.accountNo || u.accNumber || u.acct || u.number || u.account || '');
+        const getUsers = async () => {
+            let users = [];
+            if (this.apiBase) {
+                try {
+                    const r = await fetch(`${this.apiBase}/api/users`);
+                    if (r.ok) users = await r.json();
+                } catch {}
+            }
+            if (!Array.isArray(users) || users.length === 0) {
+                try { users = JSON.parse(localStorage.getItem('bankingUsers') || '[]'); } catch { users = []; }
+            }
+            return (Array.isArray(users) ? users : []).filter(u => (u.status || 'active') !== 'pending');
+        };
+
+        const render = async () => {
+            const users = await getUsers();
+            this._usersCache = users;
+            tbody.innerHTML = users.map(u => {
+                const acc = normalizeAcct(u);
+                const key = `userBalance_${acc || u.id}`;
+                const stored = parseFloat(localStorage.getItem(key));
+                const fallback = parseFloat(String(u.balance || '').replace(/[$,]/g, '')) || 0;
+                const bal = Number.isFinite(stored) ? stored : fallback;
+                const status = u.status || 'active';
+                const initials = (u.name || u.email || 'U').toString().trim().split(' ').map(n => n[0]).slice(0,2).join('');
+                const isFrozen = status === 'frozen';
+                return `
+                <tr data-user="${acc}" data-email="${u.email || ''}" data-backend-id="${u._id || u.backendId || ''}">
+                    <td><div class="user-cell"><div class="user-avatar">${initials}</div><span>${u.name || u.email}</span></div></td>
+                    <td>${u.email || ''}</td>
+                    <td>${acc}</td>
+                    <td>${this.formatCurrency(bal)}</td>
+                    <td><span class="status-badge ${status}">${status.charAt(0).toUpperCase() + status.slice(1)}</span></td>
+                    <td>
+                        <button class="action-btn danger" data-action="delete">Delete</button>
+                        <button class="action-btn" data-action="${isFrozen ? 'unfreeze' : 'freeze'}">${isFrozen ? 'Unfreeze' : 'Freeze'}</button>
+                    </td>
+                </tr>`;
+            }).join('');
+
+            // Bind actions
+            tbody.querySelectorAll('tr').forEach(row => {
+                row.querySelectorAll('button[data-action]').forEach(btn => {
+                    btn.onclick = async () => {
+                        const acct = row.getAttribute('data-user') || '';
+                        const email = row.getAttribute('data-email') || '';
+                        const backendId = row.getAttribute('data-backend-id') || '';
+                        const action = btn.getAttribute('data-action');
+                        if (action === 'delete') {
+                            await this.confirmDeleteUser(acct, backendId, email);
+                            // remove row on success
+                            // (toast shows if not found)
+                            const list = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+                            if (!list.some(u => String(u.accountNumber||'')===String(acct) || String(u.email||'').toLowerCase()===String(email).toLowerCase())) {
+                                row.remove();
+                            }
+                        } else if (action === 'freeze') {
+                            await this.setUserFreeze(acct, true, backendId, email);
+                            const badge = row.querySelector('.status-badge');
+                            if (badge) { badge.className = 'status-badge frozen'; badge.textContent = 'Frozen'; }
+                            btn.textContent = 'Unfreeze'; btn.setAttribute('data-action','unfreeze');
+                        } else if (action === 'unfreeze') {
+                            await this.setUserFreeze(acct, false, backendId, email);
+                            const badge = row.querySelector('.status-badge');
+                            if (badge) { badge.className = 'status-badge active'; badge.textContent = 'Active'; }
+                            btn.textContent = 'Freeze'; btn.setAttribute('data-action','freeze');
+                        }
+                    };
+                });
+            });
+        };
+
+        if (refresh) refresh.onclick = render;
+        await render();
+        this.showNotification('User Control loaded');
     }
 
     async loadUserManagement() {
