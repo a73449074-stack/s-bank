@@ -874,7 +874,11 @@ class AdminDashboard {
         const loadUsers = async () => {
             let users = [];
             if (this.apiBase) {
-                try { const r = await fetch(`${this.apiBase}/api/users`); if (r.ok) users = await r.json(); } catch {}
+                try {
+                    // Cache-bust to avoid stale status immediately after toggles
+                    const r = await fetch(`${this.apiBase}/api/users?ts=${Date.now()}`, { cache: 'no-store' });
+                    if (r.ok) users = await r.json();
+                } catch {}
             }
             if (!Array.isArray(users) || users.length===0) {
                 try { users = JSON.parse(localStorage.getItem('bankingUsers') || '[]'); } catch { users = []; }
@@ -953,8 +957,12 @@ class AdminDashboard {
             const u = users.find(x => normalizeAcct(x)===acct);
             if (!u) return;
             const id = u._id || u.backendId || '';
-            await this.setUserFreeze(acct, !(String(u.status||'active')==='active'), id, u.email, users.indexOf(u));
-            // Reload users and re-render to reflect updated status
+            const willFreeze = !(String(u.status||'active')==='active');
+            await this.setUserFreeze(acct, willFreeze, id, u.email, users.indexOf(u));
+            // Optimistically reflect new status immediately
+            try { u.status = willFreeze ? 'frozen' : 'active'; } catch {}
+            render();
+            // Then force-refresh users to reconcile authoritative state
             await populateSelect();
             render();
         });

@@ -349,6 +349,11 @@ class BankingApp {
         document.addEventListener('click', (e) => {
             if (e.target.matches('.deposit-btn') || e.target.closest('.deposit-btn')) {
                 e.preventDefault();
+                // Block deposit flow entirely if account is frozen
+                if (!this.isUserActiveForTransactions()) {
+                    this.showNotification('Your account is frozen. Deposits are disabled.', 'error');
+                    return;
+                }
                 this.handleDepositClick(e.target.closest('.deposit-btn') || e.target);
             }
             if (e.target.matches('[data-action="view-all-deposits"]')) {
@@ -1264,6 +1269,11 @@ class BankingApp {
     }
 
     handleTransferClick(transferItem) {
+        // Block transfer flow if account is frozen
+        if (!this.isUserActiveForTransactions()) {
+            this.showNotification('Your account is frozen. Transfers are disabled.', 'error');
+            return;
+        }
         const recipient = transferItem.querySelector('span')?.textContent || '';
         this.showTransferWizard('Quick Transfer', { recipientName: recipient });
     }
