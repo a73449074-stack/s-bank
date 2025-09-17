@@ -8,6 +8,20 @@ class AdminDashboard {
         this.init();
     }
 
+    // Format currency consistently as $1,234.56
+    formatCurrency(value) {
+        const num = Number(value) || 0;
+        try {
+            return num.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        } catch (_) {
+            // Fallback formatting
+            const fixed = num.toFixed(2);
+            const parts = fixed.split('.');
+            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            return '$' + parts.join('.');
+        }
+    }
+
     init() {
         this.checkAdminAuth();
         this.setupNavigation();
@@ -535,7 +549,7 @@ class AdminDashboard {
             details.querySelector('[data-field="status"]').textContent = user.status || 'active';
             details.querySelector('[data-field="accountType"]').textContent = user.accountType || 'checking';
             details.querySelector('[data-field="phone"]').textContent = user.phone || '';
-            details.querySelector('[data-field="balance"]').textContent = `$${(Number(bal)||0).toFixed(2)}`;
+            details.querySelector('[data-field="balance"]').textContent = this.formatCurrency(Number(bal)||0);
 
             // Prefill edit fields
             const typeSel = document.getElementById('am-account-type');
@@ -623,7 +637,7 @@ class AdminDashboard {
                         </td>
                         <td>${u.email || ''}</td>
                         <td>${u.accountType || 'Checking'}</td>
-                        <td>$${displayBal.toFixed(2)}</td>
+                        <td>${this.formatCurrency(displayBal)}</td>
                         <td><span class="status-badge ${status}">${status.charAt(0).toUpperCase() + status.slice(1)}</span></td>
                         <td>
                             <button class="action-btn danger" data-action="delete" data-user="${u.accountNumber}" data-backend-id="${u._id || u.backendId || ''}">Delete</button>
@@ -705,7 +719,7 @@ class AdminDashboard {
             details.querySelector('[data-field="status"]').textContent = user.status || 'active';
             details.querySelector('[data-field="accountType"]').textContent = user.accountType || 'checking';
             details.querySelector('[data-field="phone"]').textContent = user.phone || '';
-            details.querySelector('[data-field="balance"]').textContent = `$${bal.toFixed(2)}`;
+            details.querySelector('[data-field="balance"]').textContent = this.formatCurrency(bal);
 
             // Prefill edit fields
             const typeSel = document.getElementById('am-account-type');
@@ -824,7 +838,7 @@ class AdminDashboard {
                     <div class="pending-transaction-details">
                         <div class="pending-header">
                             <span class="pending-type ${t.type}">${t.type.toUpperCase()}${t.subType ? ' • ' + t.subType : ''}</span>
-                            <span class="pending-amount">$${Number(t.amount).toFixed(2)}</span>
+                            <span class="pending-amount">${this.formatCurrency(Number(t.amount))}</span>
                         </div>
                         <div class="pending-description">${t.description || ''}</div>
                         <div class="pending-meta">
@@ -880,7 +894,7 @@ class AdminDashboard {
                     <div class="pending-transaction-details">
                         <div class="pending-header">
                             <span class="pending-type ${t.type}">${String(t.type||'').toUpperCase()}${t.subType ? ' • ' + t.subType : ''}</span>
-                            <span class="pending-amount">$${Number(t.amount).toFixed(2)}</span>
+                            <span class="pending-amount">${this.formatCurrency(Number(t.amount))}</span>
                         </div>
                         <div class="pending-description">${t.description || ''}</div>
                         <div class="pending-meta">
@@ -974,7 +988,7 @@ class AdminDashboard {
                                     if (window.bankingApp && window.bankingApp.currentUser && String(window.bankingApp.currentUser.accountNumber) === String(acct)) {
                                         window.bankingApp.addNotification({
                                             title: 'Transaction Approved',
-                                            message: `${String(tx.type).toUpperCase()} ${tx.subType ? '('+tx.subType+') ' : ''}for $${Number(tx.amount).toFixed(2)} approved.`,
+                                            message: `${String(tx.type).toUpperCase()} ${tx.subType ? '('+tx.subType+') ' : ''}for ${this.formatCurrency(Number(tx.amount))} approved.`,
                                             type: 'success'
                                         }, true);
                                         window.bankingApp.currentBalance = bal;
@@ -1026,7 +1040,7 @@ class AdminDashboard {
                                                 window.bankingApp.updateAdminDashboard();
                                             }
                                             if (window.bankingApp && window.bankingApp.currentUser && String(window.bankingApp.currentUser.accountNumber) === String(acct)) {
-                                                window.bankingApp.addNotification({ title: 'Transaction Approved', message: `${String(tx.type).toUpperCase()} ${tx.subType ? '('+tx.subType+') ' : ''}for $${Number(tx.amount).toFixed(2)} approved.`, type: 'success' }, true);
+                                                window.bankingApp.addNotification({ title: 'Transaction Approved', message: `${String(tx.type).toUpperCase()} ${tx.subType ? '('+tx.subType+') ' : ''}for ${this.formatCurrency(Number(tx.amount))} approved.`, type: 'success' }, true);
                                                 window.bankingApp.currentBalance = bal;
                                                 window.bankingApp.updateBalanceDisplay();
                                                 if (typeof window.bankingApp.updateAccountLimitsOnApproval === 'function') {
@@ -1102,17 +1116,17 @@ class AdminDashboard {
                 if (window.bankingApp && window.bankingApp.currentUser && String(window.bankingApp.currentUser.accountNumber) === String(acct)) {
                     window.bankingApp.addNotification({
                         title: 'Transaction Approved',
-                        message: `${String(tx.type).toUpperCase()} ${tx.subType ? '('+tx.subType+') ' : ''}for $${Number(tx.amount).toFixed(2)} approved.`,
+                        message: `${String(tx.type).toUpperCase()} ${tx.subType ? '('+tx.subType+') ' : ''}for ${this.formatCurrency(Number(tx.amount))} approved.`,
                         type: 'success'
                     }, true);
                     // Low balance alert check after deduction
                     const cfg = window.bankingApp.loadAlertsConfig();
                     if (cfg.types.lowBalance && bal <= cfg.types.lowBalanceThreshold) {
-                        window.bankingApp.addNotification({ title: 'Low Balance', message: `Your balance is $${Number(bal).toFixed(2)}.`, type: 'warning' }, true);
+                        window.bankingApp.addNotification({ title: 'Low Balance', message: `Your balance is ${this.formatCurrency(Number(bal))}.`, type: 'warning' }, true);
                     }
                     // Large transaction info (already occurred)
                     if (!isNaN(Number(tx.amount)) && cfg.types.largeTransaction && Number(tx.amount) >= Number(cfg.types.largeTransactionThreshold)) {
-                        window.bankingApp.addNotification({ title: 'Large Transaction', message: `A transaction of $${Number(tx.amount).toFixed(2)} was processed.`, type: 'info' }, true);
+                        window.bankingApp.addNotification({ title: 'Large Transaction', message: `A transaction of ${this.formatCurrency(Number(tx.amount))} was processed.`, type: 'info' }, true);
                     }
                     // Refresh client balance display
                     window.bankingApp.currentBalance = bal;
@@ -1160,7 +1174,7 @@ class AdminDashboard {
                                 if (window.bankingApp && window.bankingApp.currentUser && String(window.bankingApp.currentUser.accountNumber) === String(acct)) {
                                     window.bankingApp.addNotification({
                                         title: 'Transaction Declined',
-                                        message: `${String(tx.type).toUpperCase()} ${tx.subType ? '('+tx.subType+') ' : ''}for $${Number(tx.amount).toFixed(2)} was declined.${tx.description ? ' '+tx.description : ''}`,
+                                        message: `${String(tx.type).toUpperCase()} ${tx.subType ? '('+tx.subType+') ' : ''}for ${this.formatCurrency(Number(tx.amount))} was declined.${tx.description ? ' '+tx.description : ''}`,
                                         type: 'error'
                                     }, true);
                                 }
@@ -1240,7 +1254,7 @@ class AdminDashboard {
                 if (window.bankingApp && window.bankingApp.currentUser && String(window.bankingApp.currentUser.accountNumber) === String(acct2)) {
                     window.bankingApp.addNotification({
                         title: 'Transaction Declined',
-                        message: `${String(tx.type).toUpperCase()} ${tx.subType ? '('+tx.subType+') ' : ''}for $${Number(tx.amount).toFixed(2)} was declined.${tx.description ? ' '+tx.description : ''}`,
+                        message: `${String(tx.type).toUpperCase()} ${tx.subType ? '('+tx.subType+') ' : ''}for ${this.formatCurrency(Number(tx.amount))} was declined.${tx.description ? ' '+tx.description : ''}`,
                         type: 'error'
                     }, true);
                 }
@@ -1616,8 +1630,8 @@ class AdminDashboard {
             } catch (_) { /* fall back to local */ }
         }
         // Local fallback
-        let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-        const idx = users.findIndex(u => u.accountNumber === accountNumber);
+    let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+    const idx = users.findIndex(u => String(u.accountNumber) === String(accountNumber) || String(u._id||u.backendId||'') === String(backendId||''));
         if (idx === -1) return this.showError('User not found');
         const user = users[idx];
         users.splice(idx, 1);
@@ -1683,8 +1697,8 @@ class AdminDashboard {
             } catch (_) { /* fall back to local */ }
         }
         // Local fallback
-        let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-        const idx = users.findIndex(u => u.accountNumber === accountNumber);
+    let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+    const idx = users.findIndex(u => String(u.accountNumber) === String(accountNumber) || String(u._id||u.backendId||'') === String(backendId||''));
         if (idx === -1) return this.showError('User not found');
         users[idx].status = freeze ? 'frozen' : 'active';
         localStorage.setItem('bankingUsers', JSON.stringify(users));
@@ -1914,7 +1928,7 @@ class AdminDashboard {
                     <h4>${user.name}</h4>
                     <p><i class="fas fa-envelope"></i> ${user.email}</p>
                     <p><i class="fas fa-credit-card"></i> ${user.accountNumber}</p>
-                    <p><i class="fas fa-dollar-sign"></i> $${displayBalance.toFixed(2)}</p>
+                    <p><i class="fas fa-dollar-sign"></i> ${this.formatCurrency(displayBalance)}</p>
                 </div>
                 <div class="user-status-info">
                     <span class="status-badge ${statusClass}">${statusClass}</span>
@@ -1990,7 +2004,7 @@ class AdminDashboard {
                                 </div>
                                 <div class="info-row">
                                     <label>Balance:</label>
-                                    <span>$${displayBalance.toFixed(2)}</span>
+                                    <span>${this.formatCurrency(displayBalance)}</span>
                                 </div>
                             </div>
                         </div>
