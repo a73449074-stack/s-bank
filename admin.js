@@ -619,6 +619,7 @@ class AdminDashboard {
     async loadUserControl() {
         const tbody = document.getElementById('uc-table-body');
         const refresh = document.getElementById('uc-refresh');
+        const purgeBtn = document.getElementById('uc-purge');
         if (!tbody) return;
 
         const normalizeAcct = (u) => String(u.accountNumber || u.account_number || u.accountNo || u.accNumber || u.acct || u.number || u.account || '');
@@ -696,8 +697,60 @@ class AdminDashboard {
         };
 
         if (refresh) refresh.onclick = render;
+        if (purgeBtn) purgeBtn.onclick = () => this.purgeNonAdminUsers().then(render);
         await render();
         this.showNotification('User Control loaded');
+    }
+
+    async purgeNonAdminUsers() {
+        if (!confirm('This will delete ALL non-admin users. Continue?')) return;
+        let kept = [];
+        let users = [];
+        try { users = JSON.parse(localStorage.getItem('bankingUsers') || '[]'); } catch { users = []; }
+        const isAdminUser = (u) => String(u.role||'').toLowerCase() === 'admin' || String(u.email||'').toLowerCase().includes('admin');
+
+        // Backend-first purge
+        if (this.apiBase) {
+            for (const u of users) {
+                if (isAdminUser(u)) { kept.push(u); continue; }
+                const id = u._id || u.backendId;
+                const acct = String(u.accountNumber||u.account||'');
+                if (id) {
+                    try {
+                        const r = await fetch(`${this.apiBase}/api/users/${id}`, { method: 'DELETE' });
+                        if (!r.ok) kept.push(u); else {
+                            if (acct) {
+                                localStorage.removeItem(`userTransactions_${acct}`);
+                                localStorage.removeItem(`userBalance_${acct}`);
+                            }
+                        }
+                    } catch { kept.push(u); }
+                } else {
+                    // No backend id, drop from local
+                    if (acct) {
+                        localStorage.removeItem(`userTransactions_${acct}`);
+                        localStorage.removeItem(`userBalance_${acct}`);
+                    }
+                }
+            }
+        } else {
+            // No backend, drop all non-admin locally
+            kept = users.filter(isAdminUser);
+            for (const u of users) {
+                if (!isAdminUser(u)) {
+                    const acct = String(u.accountNumber||u.account||'');
+                    if (acct) {
+                        localStorage.removeItem(`userTransactions_${acct}`);
+                        localStorage.removeItem(`userBalance_${acct}`);
+                    }
+                }
+            }
+        }
+
+        localStorage.setItem('bankingUsers', JSON.stringify(kept));
+        this.showSuccess('Purged non-admin users');
+        this.logAudit('users_purged', { count: (users.length - kept.length) });
+        this.updateStats();
     }
 
     async loadUserManagement() {
@@ -1730,16 +1783,41 @@ class AdminDashboard {
 
     async deleteUser(accountNumber, backendId, email, idx) {
         if (!confirm('Delete this user permanently? This cannot be undone.')) return;
-        // Try backend first if we have an id and apiBase
-        if (backendId && this.apiBase) {
+        const normalizeAcct = (u) => String(u.accountNumber||u.account_number||u.accountNo||u.accNumber||u.acct||u.number||u.account||'');
+        // Try backend first
+        if (this.apiBase) {
             try {
-                const resp = await fetch(`${this.apiBase}/api/users/${backendId}`, { method: 'DELETE' });
-                if (resp.ok) {
-                    this.showSuccess('User deleted successfully.');
-                    this.loadUserManagement();
-                    this.updateStats();
-                    try { closeAllUsersModal(); } catch(_) {}
-                    return;
+                // Prefer backend id; if missing, search server for matching account/email
+                let id = backendId;
+                if (!id) {
+                    const rs = await fetch(`${this.apiBase}/api/users`);
+                    if (rs.ok) {
+                        const apiUsers = await rs.json();
+                        const match = (apiUsers||[]).find(u => normalizeAcct(u)===String(accountNumber) || String(u.email||'').toLowerCase()===String(email||'').toLowerCase());
+                        if (match) id = match._id || match.backendId;
+                    }
+                }
+                if (id) {
+                    const resp = await fetch(`${this.apiBase}/api/users/${id}`, { method: 'DELETE' });
+                    if (resp.ok) {
+                        // Mirror deletion locally
+                        let list = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+                        const ix = list.findIndex(u => normalizeAcct(u)===String(accountNumber) || String(u._id||u.backendId||'')===String(id) || String(u.email||'').toLowerCase()===String(email||'').toLowerCase());
+                        let removed;
+                        if (ix > -1) { removed = list.splice(ix,1)[0]; }
+                        localStorage.setItem('bankingUsers', JSON.stringify(list));
+                        const acct = normalizeAcct(removed||{accountNumber:accountNumber});
+                        if (acct) {
+                            localStorage.removeItem(`userTransactions_${acct}`);
+                            localStorage.removeItem(`userBalance_${acct}`);
+                        }
+                        this.showSuccess('User deleted successfully.');
+                        this.logAudit('user_deleted', { accountNumber: acct, userEmail: (removed&&removed.email)||email||'', userName: removed&&removed.name });
+                        this.loadUserManagement();
+                        this.updateStats();
+                        try { closeAllUsersModal(); } catch(_) {}
+                        return;
+                    }
                 }
             } catch (_) { /* fall back to local */ }
         }
@@ -1812,15 +1890,36 @@ class AdminDashboard {
         }
 
     async setUserFreeze(accountNumber, freeze, backendId, email, idx) {
-        // Try backend first
-        if (backendId && this.apiBase) {
+        const normalizeAcct = (u) => String(u.accountNumber||u.account_number||u.accountNo||u.accNumber||u.acct||u.number||u.account||'');
+        // Try backend first; resolve id if missing
+        if (this.apiBase) {
             try {
-                const resp = await fetch(`${this.apiBase}/api/users/${backendId}/${freeze ? 'freeze' : 'unfreeze'}`, { method: 'POST' });
-                if (resp.ok) {
-                    this.showSuccess(`${freeze ? 'Frozen' : 'Unfrozen'} account`);
-                    this.loadUserManagement();
-                    this.updateStats();
-                    return;
+                let id = backendId;
+                if (!id) {
+                    const rs = await fetch(`${this.apiBase}/api/users`);
+                    if (rs.ok) {
+                        const apiUsers = await rs.json();
+                        const match = (apiUsers||[]).find(u => normalizeAcct(u)===String(accountNumber) || String(u.email||'').toLowerCase()===String(email||'').toLowerCase());
+                        if (match) id = match._id || match.backendId;
+                    }
+                }
+                if (id) {
+                    const resp = await fetch(`${this.apiBase}/api/users/${id}/${freeze ? 'freeze' : 'unfreeze'}`, { method: 'POST' });
+                    if (resp.ok) {
+                        // Mirror locally
+                        let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+                        const ix = users.findIndex(u => normalizeAcct(u)===String(accountNumber) || String(u._id||u.backendId||'')===String(id) || String(u.email||'').toLowerCase()===String(email||'').toLowerCase());
+                        if (ix > -1) {
+                            users[ix].status = freeze ? 'frozen' : 'active';
+                            localStorage.setItem('bankingUsers', JSON.stringify(users));
+                            const acct = normalizeAcct(users[ix]);
+                            this.logAudit(freeze ? 'user_frozen' : 'user_unfrozen', { accountNumber: acct, userEmail: users[ix].email, userName: users[ix].name });
+                        }
+                        this.showSuccess(`${freeze ? 'Frozen' : 'Unfrozen'} account`);
+                        this.loadUserManagement();
+                        this.updateStats();
+                        return;
+                    }
                 }
             } catch (_) { /* fall back to local */ }
         }
