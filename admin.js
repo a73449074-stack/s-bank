@@ -618,7 +618,14 @@ class AdminDashboard {
         if (!tbody) return;
 
         const renderRows = (users) => {
-            const verified = users.filter(u => (u.status || 'active') !== 'pending');
+            const base = Array.isArray(users) ? users : [];
+            const verified = base
+                .filter(u => (u.status || 'active') !== 'pending')
+                .filter(u => (u.accountNumber || u.account_number || u.accountNo || u.accNumber || u.acct || u.number || u.account || u.email));
+
+            // Cache the exact set being rendered for reliable matching later
+            this._usersCache = verified;
+
             tbody.innerHTML = verified.map(u => {
                 const initials = (u.name || u.email || 'U').toString().trim().split(' ').map(n => n[0]).slice(0,2).join('');
                 const status = u.status || 'active';
@@ -672,8 +679,20 @@ class AdminDashboard {
                     const backendId = btn.dataset.backendId || (row ? row.getAttribute('data-backend-id') : '') || '';
                     const email = btn.dataset.email || (row ? row.getAttribute('data-email') : '') || '';
                     if (action === 'delete') return this.confirmDeleteUser(account, backendId, email);
-                    if (action === 'freeze') return this.setUserFreeze(account, true, backendId, email);
-                    if (action === 'unfreeze') return this.setUserFreeze(account, false, backendId, email);
+                    if (action === 'freeze') return this.setUserFreeze(account, true, backendId, email).then(() => {
+                        // Immediate UI update
+                        const badge = row ? row.querySelector('.status-badge') : null;
+                        if (badge) { badge.className = 'status-badge frozen'; badge.textContent = 'Frozen'; }
+                        const toggleBtn = row ? row.querySelector('button[data-action]') : null;
+                        if (toggleBtn) { toggleBtn.dataset.action = 'unfreeze'; toggleBtn.textContent = 'Unfreeze'; }
+                    });
+                    if (action === 'unfreeze') return this.setUserFreeze(account, false, backendId, email).then(() => {
+                        // Immediate UI update
+                        const badge = row ? row.querySelector('.status-badge') : null;
+                        if (badge) { badge.className = 'status-badge active'; badge.textContent = 'Active'; }
+                        const toggleBtn = row ? row.querySelector('button[data-action]') : null;
+                        if (toggleBtn) { toggleBtn.dataset.action = 'freeze'; toggleBtn.textContent = 'Freeze'; }
+                    });
                 });
             });
         };
@@ -2398,6 +2417,12 @@ document.addEventListener('DOMContentLoaded', () => {
     window.adminDashboard = adminDashboard;
     
     console.log('Admin Dashboard Initialized Successfully!');
+
+    // Defensive: hide any user-app modal accidentally present on admin page
+    try {
+        const stray = document.getElementById('all-users-modal');
+        if (stray) { stray.remove(); }
+    } catch {}
 
     // Defensive: ensure sidebar backdrop is hidden on load
     const _backdrop = document.querySelector('.sidebar-backdrop');
