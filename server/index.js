@@ -53,6 +53,45 @@ app.post('/api/users', asyncH(async (req, res) => {
   res.status(201).json({ id: result.insertedId });
 }));
 
+// Delete user by id (guards against deleting admins)
+app.delete('/api/users/:id', asyncH(async (req, res) => {
+  let _id;
+  try { _id = new ObjectId(req.params.id); } catch { return res.status(400).json({ error: 'Invalid id' }); }
+  const user = await db.collection('users').findOne({ _id });
+  if (!user) return res.status(404).json({ error: 'Not found' });
+  if (String(user.role||'user').toLowerCase() === 'admin') {
+    return res.status(400).json({ error: 'Cannot delete admin user' });
+  }
+  await db.collection('users').deleteOne({ _id });
+  await db.collection('audit_logs').insertOne({ eventType: 'user_deleted', userId: _id, accountNumber: user.accountNumber, email: user.email, timestamp: new Date() });
+  res.json({ ok: true });
+}));
+
+// Freeze user account
+app.post('/api/users/:id/freeze', asyncH(async (req, res) => {
+  let _id;
+  try { _id = new ObjectId(req.params.id); } catch { return res.status(400).json({ error: 'Invalid id' }); }
+  const user = await db.collection('users').findOne({ _id });
+  if (!user) return res.status(404).json({ error: 'Not found' });
+  if (String(user.role||'user').toLowerCase() === 'admin') {
+    return res.status(400).json({ error: 'Cannot freeze admin user' });
+  }
+  await db.collection('users').updateOne({ _id }, { $set: { status: 'frozen', updatedAt: new Date(), frozenAt: new Date() } });
+  await db.collection('audit_logs').insertOne({ eventType: 'user_frozen', userId: _id, accountNumber: user.accountNumber, email: user.email, timestamp: new Date() });
+  res.json({ ok: true });
+}));
+
+// Unfreeze user account
+app.post('/api/users/:id/unfreeze', asyncH(async (req, res) => {
+  let _id;
+  try { _id = new ObjectId(req.params.id); } catch { return res.status(400).json({ error: 'Invalid id' }); }
+  const user = await db.collection('users').findOne({ _id });
+  if (!user) return res.status(404).json({ error: 'Not found' });
+  await db.collection('users').updateOne({ _id }, { $set: { status: 'active', updatedAt: new Date() }, $unset: { frozenAt: '' } });
+  await db.collection('audit_logs').insertOne({ eventType: 'user_unfrozen', userId: _id, accountNumber: user.accountNumber, email: user.email, timestamp: new Date() });
+  res.json({ ok: true });
+}));
+
 // Pending users
 app.get('/api/pending-users', asyncH(async (req, res) => {
   const rows = await db.collection('pending_users').find({}).toArray();
