@@ -153,7 +153,21 @@ app.get('/api/transactions/pending', asyncH(async (req, res) => {
 }));
 
 app.post('/api/transactions', asyncH(async (req, res) => {
-  const tx = { ...req.body, status: 'pending', createdAt: new Date(), updatedAt: new Date() };
+  const body = req.body || {};
+  const acct = body.accountNumber;
+  const email = body.userEmail;
+  // Verify user exists and is active before allowing submissions
+  const user = await db.collection('users').findOne({
+    $or: [
+      ...(acct ? [{ accountNumber: acct }] : []),
+      ...(email ? [{ email }] : [])
+    ]
+  });
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (String(user.status || 'active') !== 'active') {
+    return res.status(403).json({ error: 'Account is frozen' });
+  }
+  const tx = { ...body, status: 'pending', createdAt: new Date(), updatedAt: new Date() };
   const r = await db.collection('pending_transactions').insertOne(tx);
   res.status(201).json({ id: r.insertedId });
 }));

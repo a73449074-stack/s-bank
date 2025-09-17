@@ -1144,7 +1144,39 @@ class BankingApp {
                         userEmail: transaction.userEmail,
                         userName: transaction.userName
                     })
-                }).then(r => r.ok ? r.json() : null).then(data => {
+                }).then(async r => {
+                    if (!r) return null;
+                    if (!r.ok) {
+                        try {
+                            const err = await r.json().catch(()=>({}));
+                            if (err && (err.error || err.message)) {
+                                // Mark local transaction as declined when server blocks (e.g., frozen account)
+                                const reason = String(err.error || err.message);
+                                const key = this.getUserTransactionKey();
+                                const hist = JSON.parse(localStorage.getItem(key) || '[]');
+                                const idx = hist.findIndex(x => String(x.id) === String(transaction.id));
+                                if (idx !== -1) {
+                                    hist[idx].status = 'declined';
+                                    hist[idx].declinedAt = new Date().toISOString();
+                                    hist[idx].declineReason = reason;
+                                    localStorage.setItem(key, JSON.stringify(hist));
+                                }
+                                const pend = JSON.parse(localStorage.getItem('pendingTransactions') || '[]');
+                                const pIdx = pend.findIndex(x => String(x.id) === String(transaction.id));
+                                if (pIdx !== -1) {
+                                    pend[pIdx].status = 'declined';
+                                    pend[pIdx].declinedAt = new Date().toISOString();
+                                    pend[pIdx].declineReason = reason;
+                                    localStorage.setItem('pendingTransactions', JSON.stringify(pend));
+                                }
+                                this.updateTransactionHistory();
+                                this.showNotification(reason, 'error');
+                            }
+                        } catch {}
+                        return null;
+                    }
+                    return r.json();
+                }).then(data => {
                     if (data && data.id) {
                         transaction.backendId = data.id;
                         // Optionally update local record with backendId
@@ -1194,13 +1226,14 @@ class BankingApp {
         } catch { return false; }
     }
 
-    // Helper to ensure latest status from storage
+    // Helper to ensure latest status; uses local first, then last known server echo from sync
     isUserActiveForTransactions() {
         try {
             const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
             const u = users.find(x => x.email === this.currentUser.email || x.accountNumber === this.currentUser.accountNumber);
             if (!u) return false; // deleted user
-            return (u.status || 'active') === 'active';
+            const status = (u.status || 'active');
+            return status === 'active';
         } catch {
             return false;
         }
