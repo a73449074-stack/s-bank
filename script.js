@@ -203,14 +203,14 @@ class BankingApp {
     updateBalanceDisplay() {
         const balanceElements = document.querySelectorAll('.balance');
         balanceElements.forEach(el => {
-            el.textContent = `$${this.currentBalance.toFixed(1)}`;
+            el.textContent = this.formatCurrency(this.currentBalance);
         });
         
         // Also update balance amounts in bottom navigation
         const balanceAmounts = document.querySelectorAll('.balance-amount');
         balanceAmounts.forEach(el => {
             if (el.textContent.startsWith('$')) {
-                el.textContent = `$${this.currentBalance.toFixed(1)}`;
+                el.textContent = this.formatCurrency(this.currentBalance);
             }
         });
 
@@ -534,14 +534,14 @@ class BankingApp {
                 const amount = btn.dataset.amount;
                 amountInput.value = amount;
                 depositAmount = parseFloat(amount);
-                summaryAmount.textContent = `$${amount}.00`;
+                summaryAmount.textContent = `${this.formatCurrency(Number(amount))}`;
             });
         });
         
         // Amount input
         amountInput.addEventListener('input', () => {
             depositAmount = parseFloat(amountInput.value) || 0;
-            summaryAmount.textContent = `$${depositAmount.toFixed(2)}`;
+            summaryAmount.textContent = `${this.formatCurrency(Number(depositAmount))}`;
         });
 
         // Type-specific setup
@@ -694,7 +694,7 @@ class BankingApp {
                 }
                 if (depositType === 'mobile-check') { details = { checkNumber: checkNumber || '', frontUploaded: !!checkFront, backUploaded: !!checkBack }; }
                 if (depositType === 'wire-transfer') { details = { ...wireDetails }; }
-                const transaction = this.createPendingTransaction('deposit', depositAmount, `${depositType} - $${depositAmount.toFixed(2)}`, depositType, details);
+                const transaction = this.createPendingTransaction('deposit', depositAmount, `${depositType} - ${this.formatCurrency(Number(depositAmount))}`, depositType, details);
                 if (!transaction) return;
                 // Show success and close wizard
                 this.showNotification('Deposit request submitted successfully! Check your transaction history.', 'success');
@@ -817,7 +817,7 @@ class BankingApp {
             <div class="account-option selected" data-account="checking">
                 <div class="account-info">
                     <h5>Everyday Checking ...0630</h5>
-                    <p>Current Balance: $${this.currentBalance.toFixed(2)}</p>
+                    <p>Current Balance: ${this.formatCurrency(Number(this.currentBalance))}</p>
                 </div>
                 <i class="fas fa-check-circle"></i>
             </div>
@@ -951,7 +951,7 @@ class BankingApp {
             localStorage.setItem(savedKey, JSON.stringify(data));
             this.showSuccess('Direct deposit details saved');
             if (submitNow && expectedAmount > 0) {
-                const desc = `direct-deposit (expected) - $${expectedAmount.toFixed(2)} from ${employer || 'Employer'}`;
+                const desc = `direct-deposit (expected) - ${this.formatCurrency(Number(expectedAmount))} from ${employer || 'Employer'}`;
                 this.createPendingTransaction('deposit', expectedAmount, desc, 'direct-deposit', { employer, nextPayDate, frequency });
                 this.updateTransactionHistory();
                 this.renderRecentDeposits();
@@ -982,7 +982,7 @@ class BankingApp {
                                         <p>${t.description||''}</p>
                                         <span class="deposit-date">${new Date(t.timestamp).toLocaleString()}</span>
                                     </div>
-                                    <div class="deposit-amount ${t.status==='declined'?'pending':'success'}">+$${Number(t.amount).toFixed(2)}</div>
+                                    <div class="deposit-amount ${t.status==='declined'?'pending':'success'}">+${this.formatCurrency(Number(t.amount))}</div>
                                 </div>`).join('')
                         }
                     </div>
@@ -1025,7 +1025,7 @@ class BankingApp {
                             <p>${t.description || ''}</p>
                             <span class="deposit-date">${new Date(t.timestamp).toLocaleDateString()}</span>
                         </div>
-                        <div class="deposit-amount ${isApproved ? 'success' : (isPending ? 'pending' : '')}">+$${Number(t.amount).toFixed(2)}</div>
+                        <div class="deposit-amount ${isApproved ? 'success' : (isPending ? 'pending' : '')}">+${this.formatCurrency(Number(t.amount))}</div>
                     </div>`;
             }).join('');
         } catch {}
@@ -1081,12 +1081,12 @@ class BankingApp {
                         .reduce((s, t) => s + Number(t.amount || 0), 0);
                     const effectiveAvailable = available - pendingOut;
                     if (Number(amount) > effectiveAvailable) {
-                        this.showNotification(`Insufficient funds. Available after pending: $${Math.max(0, effectiveAvailable).toFixed(2)}`, 'error');
+                        this.showNotification(`Insufficient funds. Available after pending: ${this.formatCurrency(Number(Math.max(0, effectiveAvailable)))}`, 'error');
                         return null;
                     }
                 } catch {
                     if (Number(amount) > available) {
-                        this.showNotification(`Insufficient funds. Available: $${available.toFixed(2)}`, 'error');
+                        this.showNotification(`Insufficient funds. Available: ${this.formatCurrency(Number(available))}`, 'error');
                         return null;
                     }
                 }
@@ -1300,7 +1300,7 @@ class BankingApp {
                                 </div>
                             </div>
                             <div class="transaction-amount ${amountClass}">
-                                ${amountPrefix}$${transaction.amount.toFixed(2)}
+                                ${amountPrefix}${this.formatCurrency(Number(transaction.amount))}
                             </div>
                         </div>
                     </div>
@@ -1374,25 +1374,25 @@ class BankingApp {
                 // Available
                 const availEl = cards[0].querySelector('.balance-amount');
                 const availNote = cards[0].querySelector('.balance-note');
-                if (availEl) availEl.textContent = `$${available.toFixed(2)}`;
+                if (availEl) availEl.textContent = `${this.formatCurrency(Number(available))}`;
                 if (availNote) availNote.textContent = available === 0 ? 'No available funds' : 'Ready to spend';
 
                 // Pending
                 const pendEl = cards[1].querySelector('.balance-amount');
                 const pendNote = cards[1].querySelector('.balance-note');
-                if (pendEl) pendEl.textContent = `${pendingTotal < 0 ? '-' : ''}$${Math.abs(pendingTotal).toFixed(2)}`;
+                if (pendEl) pendEl.textContent = `${pendingTotal < 0 ? '-' : ''}${this.formatCurrency(Number(Math.abs(pendingTotal)))}`;
                 if (pendNote) pendNote.textContent = pending.length ? `${pending.length} pending ${pending.length === 1 ? 'item' : 'items'}` : 'No pending';
 
                 // Current incl pending
                 const currEl = cards[2].querySelector('.balance-amount');
                 const currNote = cards[2].querySelector('.balance-note');
-                if (currEl) currEl.textContent = `$${currentInclPending.toFixed(2)}`;
+                if (currEl) currEl.textContent = `${this.formatCurrency(Number(currentInclPending))}`;
                 if (currNote) currNote.textContent = 'Including pending';
 
                 // Average daily
                 const avgEl = cards[3].querySelector('.balance-amount');
                 const avgNote = cards[3].querySelector('.balance-note');
-                if (avgEl) avgEl.textContent = `$${(isFinite(avgDaily) ? avgDaily : 0).toFixed(2)}`;
+                if (avgEl) avgEl.textContent = `${this.formatCurrency(Number(isFinite(avgDaily) ? avgDaily : 0))}`;
                 if (avgNote) avgNote.textContent = 'Last 30 days';
             }
 
@@ -1450,7 +1450,7 @@ class BankingApp {
                         <h5>${this.escapeHtml(title)}</h5>
                         <p>${this.escapeHtml(methodLabel)} • ${date}</p>
                     </div>
-                    <div class="transfer-amount ${amountClass}">${sign}$${Number(tx.amount).toFixed(2)}</div>
+                    <div class="transfer-amount ${amountClass}">${sign}${this.formatCurrency(Number(tx.amount))}</div>
                 </div>`;
         }).join('');
     }
@@ -1945,7 +1945,7 @@ class BankingApp {
                     <div class="pending-transaction-details">
                         <div class="pending-header">
                             <span class="pending-type ${transaction.type}">${transaction.type.toUpperCase()}</span>
-                            <span class="pending-amount">$${transaction.amount.toFixed(2)}</span>
+                            <span class="pending-amount">${this.formatCurrency(Number(transaction.amount))}</span>
                         </div>
                         <div class="pending-description">${transaction.description}</div>
                         <div class="pending-meta">

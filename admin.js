@@ -639,7 +639,7 @@ class AdminDashboard {
         const render = async () => {
             const users = await getUsers();
             this._usersCache = users;
-            tbody.innerHTML = users.map(u => {
+            tbody.innerHTML = users.map((u, i) => {
                 const acc = normalizeAcct(u);
                 const key = `userBalance_${acc || u.id}`;
                 const stored = parseFloat(localStorage.getItem(key));
@@ -649,7 +649,7 @@ class AdminDashboard {
                 const initials = (u.name || u.email || 'U').toString().trim().split(' ').map(n => n[0]).slice(0,2).join('');
                 const isFrozen = status === 'frozen';
                 return `
-                <tr data-user="${acc}" data-email="${u.email || ''}" data-backend-id="${u._id || u.backendId || ''}">
+                <tr data-user="${acc}" data-email="${u.email || ''}" data-backend-id="${u._id || u.backendId || ''}" data-idx="${i}">
                     <td><div class="user-cell"><div class="user-avatar">${initials}</div><span>${u.name || u.email}</span></div></td>
                     <td>${u.email || ''}</td>
                     <td>${acc}</td>
@@ -670,8 +670,9 @@ class AdminDashboard {
                         const email = row.getAttribute('data-email') || '';
                         const backendId = row.getAttribute('data-backend-id') || '';
                         const action = btn.getAttribute('data-action');
+                        const idx = parseInt(row.getAttribute('data-idx')||'-1',10);
                         if (action === 'delete') {
-                            await this.confirmDeleteUser(acct, backendId, email);
+                            await this.confirmDeleteUser(acct, backendId, email, idx);
                             // remove row on success
                             // (toast shows if not found)
                             const list = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
@@ -679,12 +680,12 @@ class AdminDashboard {
                                 row.remove();
                             }
                         } else if (action === 'freeze') {
-                            await this.setUserFreeze(acct, true, backendId, email);
+                            await this.setUserFreeze(acct, true, backendId, email, idx);
                             const badge = row.querySelector('.status-badge');
                             if (badge) { badge.className = 'status-badge frozen'; badge.textContent = 'Frozen'; }
                             btn.textContent = 'Unfreeze'; btn.setAttribute('data-action','unfreeze');
                         } else if (action === 'unfreeze') {
-                            await this.setUserFreeze(acct, false, backendId, email);
+                            await this.setUserFreeze(acct, false, backendId, email, idx);
                             const badge = row.querySelector('.status-badge');
                             if (badge) { badge.className = 'status-badge active'; badge.textContent = 'Active'; }
                             btn.textContent = 'Freeze'; btn.setAttribute('data-action','freeze');
@@ -712,7 +713,7 @@ class AdminDashboard {
             // Cache the exact set being rendered for reliable matching later
             this._usersCache = verified;
 
-            tbody.innerHTML = verified.map(u => {
+            tbody.innerHTML = verified.map((u, i) => {
                 const initials = (u.name || u.email || 'U').toString().trim().split(' ').map(n => n[0]).slice(0,2).join('');
                 const status = u.status || 'active';
                 // Normalize account number and account type fields for mixed backend/local schemas
@@ -726,7 +727,7 @@ class AdminDashboard {
                 const displayBal = Number.isFinite(numeric) ? numeric : fallback;
                 const isFrozen = status === 'frozen';
                 return `
-                    <tr data-user="${acc}" data-backend-id="${u._id || u.backendId || ''}" data-email="${u.email || ''}">
+                    <tr data-user="${acc}" data-backend-id="${u._id || u.backendId || ''}" data-email="${u.email || ''}" data-idx="${i}">
                         <td>
                             <div class="user-cell">
                                 <div class="user-avatar">${initials}</div>
@@ -764,15 +765,16 @@ class AdminDashboard {
                     const account = btn.dataset.user || (row ? row.getAttribute('data-user') : '');
                     const backendId = btn.dataset.backendId || (row ? row.getAttribute('data-backend-id') : '') || '';
                     const email = btn.dataset.email || (row ? row.getAttribute('data-email') : '') || '';
-                    if (action === 'delete') return this.confirmDeleteUser(account, backendId, email);
-                    if (action === 'freeze') return this.setUserFreeze(account, true, backendId, email).then(() => {
+                    const idx = row ? parseInt(row.getAttribute('data-idx')||'-1',10) : -1;
+                    if (action === 'delete') return this.confirmDeleteUser(account, backendId, email, idx);
+                    if (action === 'freeze') return this.setUserFreeze(account, true, backendId, email, idx).then(() => {
                         // Immediate UI update
                         const badge = row ? row.querySelector('.status-badge') : null;
                         if (badge) { badge.className = 'status-badge frozen'; badge.textContent = 'Frozen'; }
                         const toggleBtn = row ? row.querySelector('button[data-action]') : null;
                         if (toggleBtn) { toggleBtn.dataset.action = 'unfreeze'; toggleBtn.textContent = 'Unfreeze'; }
                     });
-                    if (action === 'unfreeze') return this.setUserFreeze(account, false, backendId, email).then(() => {
+                    if (action === 'unfreeze') return this.setUserFreeze(account, false, backendId, email, idx).then(() => {
                         // Immediate UI update
                         const badge = row ? row.querySelector('.status-badge') : null;
                         if (badge) { badge.className = 'status-badge active'; badge.textContent = 'Active'; }
@@ -1726,7 +1728,7 @@ class AdminDashboard {
         // not used by new Users table
     }
 
-    async deleteUser(accountNumber, backendId, email) {
+    async deleteUser(accountNumber, backendId, email, idx) {
         if (!confirm('Delete this user permanently? This cannot be undone.')) return;
         // Try backend first if we have an id and apiBase
         if (backendId && this.apiBase) {
@@ -1742,14 +1744,21 @@ class AdminDashboard {
             } catch (_) { /* fall back to local */ }
         }
         // Local fallback
-    let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-    let idx = users.findIndex(u => String(u.accountNumber||u.account_number||u.accountNo||u.accNumber||u.acct||u.number||u.account||'') === String(accountNumber)
-        || String(u._id||u.backendId||'') === String(backendId||'')
-        || (email && String(u.email||'').toLowerCase() === String(email).toLowerCase()));
-        if (idx === -1) return this.showError('User not found');
-        const user = users[idx];
+        let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+        let foundIdx = users.findIndex(u => String(u.accountNumber||u.account_number||u.accountNo||u.accNumber||u.acct||u.number||u.account||'') === String(accountNumber)
+            || String(u._id||u.backendId||'') === String(backendId||'')
+            || (email && String(u.email||'').toLowerCase() === String(email).toLowerCase()));
+        // If not found and an index was provided from the rendered table, use it as a last-resort mapping
+        if (foundIdx === -1 && Number.isInteger(idx)) {
+            const i = Number(idx);
+            if (i >= 0 && i < users.length) {
+                foundIdx = i;
+            }
+        }
+        if (foundIdx === -1) return this.showError('User not found');
+        const user = users[foundIdx];
         const resolvedAcct = String(user.accountNumber||user.account_number||user.accountNo||user.accNumber||user.acct||user.number||user.account||accountNumber||'');
-        users.splice(idx, 1);
+        users.splice(foundIdx, 1);
         localStorage.setItem('bankingUsers', JSON.stringify(users));
         // Clean up per-user data
         if (resolvedAcct) {
@@ -1763,7 +1772,7 @@ class AdminDashboard {
                 try { closeAllUsersModal(); } catch(_) {}
     }
 
-        confirmDeleteUser(accountNumber, backendId, email) {
+    confirmDeleteUser(accountNumber, backendId, email, idx) {
                 const existing = document.getElementById('confirmDeleteModal');
                 if (existing) existing.remove();
                 let users = [];
@@ -1798,11 +1807,11 @@ class AdminDashboard {
                         const btnConfirm = document.getElementById('cdm-confirm');
                         if (btnCancel) btnCancel.onclick = close;
                         if (btnClose) btnClose.onclick = close;
-                        if (btnConfirm) btnConfirm.onclick = async () => { await this.deleteUser(accountNumber, backendId, email); close(); };
+            if (btnConfirm) btnConfirm.onclick = async () => { await this.deleteUser(accountNumber, backendId, email, idx); close(); };
                 }
         }
 
-    async setUserFreeze(accountNumber, freeze, backendId, email) {
+    async setUserFreeze(accountNumber, freeze, backendId, email, idx) {
         // Try backend first
         if (backendId && this.apiBase) {
             try {
@@ -1816,16 +1825,23 @@ class AdminDashboard {
             } catch (_) { /* fall back to local */ }
         }
         // Local fallback
-    let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-    const idx = users.findIndex(u => String(u.accountNumber||u.account_number||u.accountNo||u.accNumber||u.acct||u.number||u.account||'') === String(accountNumber)
-        || String(u._id||u.backendId||'') === String(backendId||'')
-        || (email && String(u.email||'').toLowerCase() === String(email).toLowerCase()));
-        if (idx === -1) return this.showError('User not found');
-        users[idx].status = freeze ? 'frozen' : 'active';
+        let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+        let foundIdx = users.findIndex(u => String(u.accountNumber||u.account_number||u.accountNo||u.accNumber||u.acct||u.number||u.account||'') === String(accountNumber)
+            || String(u._id||u.backendId||'') === String(backendId||'')
+            || (email && String(u.email||'').toLowerCase() === String(email).toLowerCase()));
+        // If not found and we have a row index from the rendered cache, use it as a last-resort mapping
+        if (foundIdx === -1 && Number.isInteger(idx)) {
+            const i = Number(idx);
+            if (i >= 0 && i < users.length) {
+                foundIdx = i;
+            }
+        }
+        if (foundIdx === -1) return this.showError('User not found');
+        users[foundIdx].status = freeze ? 'frozen' : 'active';
         localStorage.setItem('bankingUsers', JSON.stringify(users));
-        this.showSuccess(`${freeze ? 'Frozen' : 'Unfrozen'} ${users[idx].name}'s account`);
-        const resolvedAcct2 = String(users[idx].accountNumber||users[idx].account_number||users[idx].accountNo||users[idx].accNumber||users[idx].acct||users[idx].number||users[idx].account||accountNumber||'');
-        this.logAudit(freeze ? 'user_frozen' : 'user_unfrozen', { accountNumber: resolvedAcct2, userEmail: users[idx].email, userName: users[idx].name });
+        this.showSuccess(`${freeze ? 'Frozen' : 'Unfrozen'} ${users[foundIdx].name}'s account`);
+        const resolvedAcct2 = String(users[foundIdx].accountNumber||users[foundIdx].account_number||users[foundIdx].accountNo||users[foundIdx].accNumber||users[foundIdx].acct||users[foundIdx].number||users[foundIdx].account||accountNumber||'');
+        this.logAudit(freeze ? 'user_frozen' : 'user_unfrozen', { accountNumber: resolvedAcct2, userEmail: users[foundIdx].email, userName: users[foundIdx].name });
         this.loadUserManagement();
         this.updateStats();
     }
