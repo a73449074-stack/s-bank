@@ -622,13 +622,18 @@ class AdminDashboard {
             tbody.innerHTML = verified.map(u => {
                 const initials = (u.name || u.email || 'U').toString().trim().split(' ').map(n => n[0]).slice(0,2).join('');
                 const status = u.status || 'active';
-                const balanceKey = `userBalance_${u.accountNumber || u.id}`;
+                // Normalize account number and account type fields for mixed backend/local schemas
+                const acc = String(
+                    u.accountNumber || u.account_number || u.accountNo || u.accNumber || u.acct || u.number || u.account || ''
+                );
+                const acctType = u.accountType || u.account_type || 'Checking';
+                const balanceKey = `userBalance_${acc || u.id}`;
                 const numeric = parseFloat(localStorage.getItem(balanceKey));
                 const fallback = parseFloat((u.balance || '').toString().replace(/[$,]/g, '')) || 0;
                 const displayBal = Number.isFinite(numeric) ? numeric : fallback;
                 const isFrozen = status === 'frozen';
                 return `
-                    <tr data-user="${u.accountNumber || ''}" data-backend-id="${u._id || u.backendId || ''}">
+                    <tr data-user="${acc}" data-backend-id="${u._id || u.backendId || ''}" data-email="${u.email || ''}">
                         <td>
                             <div class="user-cell">
                                 <div class="user-avatar">${initials}</div>
@@ -636,12 +641,12 @@ class AdminDashboard {
                             </div>
                         </td>
                         <td>${u.email || ''}</td>
-                        <td>${u.accountType || 'Checking'}</td>
+                        <td>${acctType}</td>
                         <td>${this.formatCurrency(displayBal)}</td>
                         <td><span class="status-badge ${status}">${status.charAt(0).toUpperCase() + status.slice(1)}</span></td>
                         <td>
-                            <button class="action-btn danger" data-action="delete" data-user="${u.accountNumber}" data-backend-id="${u._id || u.backendId || ''}">Delete</button>
-                            <button class="action-btn" data-action="${isFrozen ? 'unfreeze' : 'freeze'}" data-user="${u.accountNumber}" data-backend-id="${u._id || u.backendId || ''}">${isFrozen ? 'Unfreeze' : 'Freeze'}</button>
+                            <button class="action-btn danger" data-action="delete" data-user="${acc}" data-backend-id="${u._id || u.backendId || ''}" data-email="${u.email || ''}">Delete</button>
+                            <button class="action-btn" data-action="${isFrozen ? 'unfreeze' : 'freeze'}" data-user="${acc}" data-backend-id="${u._id || u.backendId || ''}" data-email="${u.email || ''}">${isFrozen ? 'Unfreeze' : 'Freeze'}</button>
                         </td>
                     </tr>
                 `;
@@ -662,11 +667,13 @@ class AdminDashboard {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const action = btn.dataset.action;
-                    const account = btn.dataset.user;
-                    const backendId = btn.dataset.backendId || '';
-                    if (action === 'delete') return this.confirmDeleteUser(account, backendId);
-                    if (action === 'freeze') return this.setUserFreeze(account, true, backendId);
-                    if (action === 'unfreeze') return this.setUserFreeze(account, false, backendId);
+                    const row = btn.closest('tr');
+                    const account = btn.dataset.user || (row ? row.getAttribute('data-user') : '');
+                    const backendId = btn.dataset.backendId || (row ? row.getAttribute('data-backend-id') : '') || '';
+                    const email = btn.dataset.email || (row ? row.getAttribute('data-email') : '') || '';
+                    if (action === 'delete') return this.confirmDeleteUser(account, backendId, email);
+                    if (action === 'freeze') return this.setUserFreeze(account, true, backendId, email);
+                    if (action === 'unfreeze') return this.setUserFreeze(account, false, backendId, email);
                 });
             });
         };
@@ -1614,7 +1621,7 @@ class AdminDashboard {
         // not used by new Users table
     }
 
-    async deleteUser(accountNumber, backendId) {
+    async deleteUser(accountNumber, backendId, email) {
         if (!confirm('Delete this user permanently? This cannot be undone.')) return;
         // Try backend first if we have an id and apiBase
         if (backendId && this.apiBase) {
@@ -1631,27 +1638,34 @@ class AdminDashboard {
         }
         // Local fallback
     let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-    const idx = users.findIndex(u => String(u.accountNumber) === String(accountNumber) || String(u._id||u.backendId||'') === String(backendId||''));
+    let idx = users.findIndex(u => String(u.accountNumber||u.account_number||u.accountNo||u.accNumber||u.acct||u.number||u.account||'') === String(accountNumber)
+        || String(u._id||u.backendId||'') === String(backendId||'')
+        || (email && String(u.email||'').toLowerCase() === String(email).toLowerCase()));
         if (idx === -1) return this.showError('User not found');
         const user = users[idx];
+        const resolvedAcct = String(user.accountNumber||user.account_number||user.accountNo||user.accNumber||user.acct||user.number||user.account||accountNumber||'');
         users.splice(idx, 1);
         localStorage.setItem('bankingUsers', JSON.stringify(users));
         // Clean up per-user data
-        localStorage.removeItem(`userTransactions_${accountNumber}`);
-        localStorage.removeItem(`userBalance_${accountNumber}`);
+        if (resolvedAcct) {
+            localStorage.removeItem(`userTransactions_${resolvedAcct}`);
+            localStorage.removeItem(`userBalance_${resolvedAcct}`);
+        }
         this.showSuccess(`Deleted ${user.name}'s account`);
-        this.logAudit('user_deleted', { accountNumber: accountNumber, userEmail: user.email, userName: user.name });
+        this.logAudit('user_deleted', { accountNumber: resolvedAcct || accountNumber, userEmail: user.email, userName: user.name });
         this.loadUserManagement();
         this.updateStats();
                 try { closeAllUsersModal(); } catch(_) {}
     }
 
-        confirmDeleteUser(accountNumber, backendId) {
+        confirmDeleteUser(accountNumber, backendId, email) {
                 const existing = document.getElementById('confirmDeleteModal');
                 if (existing) existing.remove();
                 let users = [];
                 try { users = JSON.parse(localStorage.getItem('bankingUsers') || '[]'); } catch {}
-                const u = users.find(x => x.accountNumber === accountNumber) || {};
+                const u = users.find(x => String(x.accountNumber||x.account_number||x.accountNo||x.accNumber||x.acct||x.number||x.account||'') === String(accountNumber)
+                    || String(x._id||x.backendId||'') === String(backendId||'')
+                    || (email && String(x.email||'').toLowerCase() === String(email).toLowerCase())) || {};
                 const name = u.name || accountNumber;
                 const html = `
                 <div class="confirm-modal" id="confirmDeleteModal">
@@ -1679,11 +1693,11 @@ class AdminDashboard {
                         const btnConfirm = document.getElementById('cdm-confirm');
                         if (btnCancel) btnCancel.onclick = close;
                         if (btnClose) btnClose.onclick = close;
-                        if (btnConfirm) btnConfirm.onclick = async () => { await this.deleteUser(accountNumber, backendId); close(); };
+                        if (btnConfirm) btnConfirm.onclick = async () => { await this.deleteUser(accountNumber, backendId, email); close(); };
                 }
         }
 
-    async setUserFreeze(accountNumber, freeze, backendId) {
+    async setUserFreeze(accountNumber, freeze, backendId, email) {
         // Try backend first
         if (backendId && this.apiBase) {
             try {
@@ -1698,12 +1712,15 @@ class AdminDashboard {
         }
         // Local fallback
     let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-    const idx = users.findIndex(u => String(u.accountNumber) === String(accountNumber) || String(u._id||u.backendId||'') === String(backendId||''));
+    const idx = users.findIndex(u => String(u.accountNumber||u.account_number||u.accountNo||u.accNumber||u.acct||u.number||u.account||'') === String(accountNumber)
+        || String(u._id||u.backendId||'') === String(backendId||'')
+        || (email && String(u.email||'').toLowerCase() === String(email).toLowerCase()));
         if (idx === -1) return this.showError('User not found');
         users[idx].status = freeze ? 'frozen' : 'active';
         localStorage.setItem('bankingUsers', JSON.stringify(users));
         this.showSuccess(`${freeze ? 'Frozen' : 'Unfrozen'} ${users[idx].name}'s account`);
-        this.logAudit(freeze ? 'user_frozen' : 'user_unfrozen', { accountNumber, userEmail: users[idx].email, userName: users[idx].name });
+        const resolvedAcct2 = String(users[idx].accountNumber||users[idx].account_number||users[idx].accountNo||users[idx].accNumber||users[idx].acct||users[idx].number||users[idx].account||accountNumber||'');
+        this.logAudit(freeze ? 'user_frozen' : 'user_unfrozen', { accountNumber: resolvedAcct2, userEmail: users[idx].email, userName: users[idx].name });
         this.loadUserManagement();
         this.updateStats();
     }
@@ -2061,6 +2078,7 @@ class AdminDashboard {
 
     createPendingUserCard(user) {
         const requestDate = new Date(user.requestDate).toLocaleDateString();
+        const balNum = parseFloat(String(user.balance||'').toString().replace(/[$,]/g,'')||'0') || 0;
         
         return `
             <div class="pending-user-card" data-user-id="${user.accountNumber}" data-backend-id="${user._id || user.backendId || ''}">
@@ -2079,7 +2097,7 @@ class AdminDashboard {
                 <div class="pending-user-details">
                     <div class="detail-row">
                         <label>Initial Balance:</label>
-                        <span>${user.balance}</span>
+                        <span>${this.formatCurrency(balNum)}</span>
                     </div>
                     <div class="detail-row">
                         <label>PIN:</label>
