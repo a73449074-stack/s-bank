@@ -76,9 +76,167 @@ class BankingApp {
 
     // initializeDemoUsers removed
 
-    // remove demo transaction creation
+    // Generate comprehensive transaction history with 100+ receipts
     createDemoTransactions() {
-        // no-op
+        // Set high balance for current user - $40+ million
+        const userBalanceKey = this.getUserBalanceKey();
+        const baseAmount = 40000000; // $40 million base
+        const randomExtra = Math.floor(Math.random() * 20000000); // Up to $20M extra
+        const finalBalance = baseAmount + randomExtra;
+        localStorage.setItem(userBalanceKey, finalBalance.toString());
+        
+        // Update user balance in banking users storage
+        const bankingUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+        const userIndex = bankingUsers.findIndex(u => u.email === this.currentUser.email);
+        if (userIndex !== -1) {
+            bankingUsers[userIndex].balance = this.formatCurrency(finalBalance);
+            localStorage.setItem('bankingUsers', JSON.stringify(bankingUsers));
+        }
+
+        // Generate 100+ diverse transactions
+        const transactions = this.generateBulkTransactionHistory(120); // Generate 120 transactions
+        
+        // Store in user-specific transaction history
+        const userTransactionKey = this.getUserTransactionKey();
+        localStorage.setItem(userTransactionKey, JSON.stringify(transactions));
+        
+        console.log(`Generated ${transactions.length} transactions for user ${this.currentUser.name}`);
+    }
+
+    generateBulkTransactionHistory(count = 120) {
+        const transactions = [];
+        const now = new Date();
+        
+        // Transaction templates with realistic data
+        const transactionTemplates = [
+            // Deposits
+            { type: 'deposit', subType: 'wire_transfer', descriptions: ['International Wire Transfer', 'Domestic Wire Transfer', 'Business Wire Transfer'], amounts: [50000, 150000, 250000, 500000, 1000000] },
+            { type: 'deposit', subType: 'check_deposit', descriptions: ['Check Deposit', 'Business Check Deposit', 'Cashiers Check Deposit'], amounts: [25000, 75000, 125000, 200000] },
+            { type: 'deposit', subType: 'ach_transfer', descriptions: ['ACH Transfer', 'Direct Deposit', 'Electronic Transfer'], amounts: [15000, 35000, 85000, 150000] },
+            { type: 'deposit', subType: 'investment_return', descriptions: ['Investment Returns', 'Dividend Payment', 'Capital Gains', 'Bond Interest'], amounts: [100000, 250000, 500000, 750000] },
+            { type: 'deposit', subType: 'business_revenue', descriptions: ['Business Revenue', 'Contract Payment', 'Sales Revenue'], amounts: [200000, 400000, 800000, 1200000] },
+            { type: 'deposit', subType: 'real_estate', descriptions: ['Property Sale', 'Rental Income', 'Real Estate Investment'], amounts: [500000, 1000000, 2000000, 3000000] },
+            
+            // Withdrawals/Transfers
+            { type: 'withdrawal', subType: 'wire_transfer', descriptions: ['Outgoing Wire Transfer', 'International Wire', 'Business Payment'], amounts: [25000, 50000, 100000, 200000] },
+            { type: 'withdrawal', subType: 'investment', descriptions: ['Investment Purchase', 'Stock Purchase', 'Bond Purchase', 'Portfolio Investment'], amounts: [100000, 300000, 500000, 1000000] },
+            { type: 'withdrawal', subType: 'business_expense', descriptions: ['Business Expense', 'Operational Costs', 'Equipment Purchase'], amounts: [50000, 150000, 300000] },
+            { type: 'withdrawal', subType: 'real_estate', descriptions: ['Property Purchase', 'Real Estate Investment', 'Property Development'], amounts: [500000, 1500000, 2500000] },
+            { type: 'withdrawal', subType: 'loan_payment', descriptions: ['Loan Payment', 'Mortgage Payment', 'Credit Line Payment'], amounts: [25000, 75000, 150000] },
+            { type: 'withdrawal', subType: 'tax_payment', descriptions: ['Tax Payment', 'Quarterly Tax Payment', 'Annual Tax Payment'], amounts: [100000, 250000, 500000] }
+        ];
+
+        const companies = [
+            'Goldman Sachs', 'JP Morgan Chase', 'Morgan Stanley', 'Bank of America', 'Wells Fargo',
+            'Citigroup', 'BlackRock Inc', 'Vanguard Group', 'State Street Corp', 'Fidelity Investments',
+            'Charles Schwab', 'American Express', 'Capital One', 'PNC Financial', 'TD Bank',
+            'Apple Inc', 'Microsoft Corp', 'Amazon.com Inc', 'Google LLC', 'Meta Platforms',
+            'Tesla Inc', 'NVIDIA Corp', 'Berkshire Hathaway', 'Johnson & Johnson', 'Exxon Mobil',
+            'Procter & Gamble', 'Walmart Inc', 'Home Depot Inc', 'Mastercard Inc', 'Visa Inc',
+            'Coca-Cola Company', 'PepsiCo Inc', 'McDonald\'s Corp', 'Disney Company', 'Netflix Inc',
+            'Adobe Systems', 'Oracle Corp', 'Salesforce Inc', 'Intel Corp', 'IBM Corp',
+            'Real Estate Holdings LLC', 'Property Investment Group', 'Commercial Real Estate Fund',
+            'Hedge Fund Management', 'Private Equity Partners', 'Investment Advisory Services'
+        ];
+
+        const locations = [
+            'New York, NY', 'Los Angeles, CA', 'Chicago, IL', 'Houston, TX', 'Phoenix, AZ',
+            'Philadelphia, PA', 'San Antonio, TX', 'San Diego, CA', 'Dallas, TX', 'San Jose, CA',
+            'Austin, TX', 'Jacksonville, FL', 'Fort Worth, TX', 'Columbus, OH', 'Charlotte, NC',
+            'San Francisco, CA', 'Indianapolis, IN', 'Seattle, WA', 'Denver, CO', 'Washington, DC',
+            'Boston, MA', 'El Paso, TX', 'Nashville, TN', 'Detroit, MI', 'Oklahoma City, OK',
+            'London, UK', 'Tokyo, Japan', 'Hong Kong', 'Singapore', 'Zurich, Switzerland',
+            'Dubai, UAE', 'Sydney, Australia', 'Toronto, Canada', 'Frankfurt, Germany', 'Paris, France'
+        ];
+
+        for (let i = 0; i < count; i++) {
+            const template = transactionTemplates[Math.floor(Math.random() * transactionTemplates.length)];
+            const amount = template.amounts[Math.floor(Math.random() * template.amounts.length)];
+            const description = template.descriptions[Math.floor(Math.random() * template.descriptions.length)];
+            const company = companies[Math.floor(Math.random() * companies.length)];
+            const location = locations[Math.floor(Math.random() * locations.length)];
+            
+            // Generate date within last 2 years
+            const daysBack = Math.floor(Math.random() * 730); // 2 years
+            const transactionDate = new Date(now.getTime() - (daysBack * 24 * 60 * 60 * 1000));
+            
+            // Add some variation to amounts
+            const finalAmount = amount + (Math.random() * 10000) - 5000;
+            const roundedAmount = Math.max(1000, Math.round(finalAmount / 100) * 100); // Round to nearest $100, min $1000
+            
+            const transaction = {
+                id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                accountNumber: this.currentUser.accountNumber,
+                type: template.type,
+                subType: template.subType,
+                amount: roundedAmount,
+                description: `${description} - ${company}`,
+                recipient: template.type === 'deposit' ? this.currentUser.name : company,
+                sender: template.type === 'deposit' ? company : this.currentUser.name,
+                date: transactionDate.toLocaleDateString(),
+                time: transactionDate.toLocaleTimeString(),
+                timestamp: transactionDate.toISOString(),
+                status: 'approved',
+                method: template.subType,
+                location: location,
+                reference: `REF${Math.random().toString(36).substr(2, 8).toUpperCase()}`,
+                confirmationNumber: `CNF${Math.random().toString(36).substr(2, 10).toUpperCase()}`,
+                fee: template.type === 'withdrawal' ? Math.floor(Math.random() * 50) + 10 : 0,
+                category: this.getTransactionCategory(template.subType),
+                balance_after: 0 // Will be calculated later
+            };
+            
+            transactions.push(transaction);
+        }
+        
+        // Sort by date (oldest first) to calculate running balance
+        transactions.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        // Calculate running balance (starting from a lower amount and building up)
+        let runningBalance = 5000000; // Start with $5M
+        transactions.forEach(transaction => {
+            if (transaction.type === 'deposit') {
+                runningBalance += transaction.amount;
+            } else {
+                runningBalance -= transaction.amount;
+            }
+            transaction.balance_after = runningBalance;
+        });
+        
+        // Sort by date (newest first) for display
+        transactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        return transactions;
+    }
+
+    getTransactionCategory(subType) {
+        const categories = {
+            'wire_transfer': 'Transfer',
+            'check_deposit': 'Deposit',
+            'ach_transfer': 'Transfer',
+            'investment_return': 'Investment',
+            'business_revenue': 'Business',
+            'real_estate': 'Real Estate',
+            'investment': 'Investment',
+            'business_expense': 'Business',
+            'loan_payment': 'Loan',
+            'tax_payment': 'Tax'
+        };
+        return categories[subType] || 'Other';
+    }
+
+    initializeTransactionHistory() {
+        // Check if user already has transactions
+        const userTransactionKey = this.getUserTransactionKey();
+        const existingTransactions = JSON.parse(localStorage.getItem(userTransactionKey) || '[]');
+        
+        // Only generate if user has less than 50 transactions
+        if (existingTransactions.length < 50) {
+            console.log(`Generating comprehensive transaction history for ${this.currentUser.name}...`);
+            this.createDemoTransactions();
+        } else {
+            console.log(`User ${this.currentUser.name} already has ${existingTransactions.length} transactions`);
+        }
     }
 
     init() {
@@ -91,6 +249,10 @@ class BankingApp {
         
         // Initialize to show main content by default (Accounts tab)
         this.initializeDefaultView();
+        
+        // Generate comprehensive transaction history if not already present
+        this.initializeTransactionHistory();
+        
         this.updateBalanceDisplay();
         // Render menu profile if markup exists
     this.renderMenuProfile();
@@ -1278,7 +1440,7 @@ class BankingApp {
         this.showTransferWizard('Quick Transfer', { recipientName: recipient });
     }
 
-    updateTransactionHistory() {
+    updateTransactionHistory(page = 1) {
         const transactionList = document.querySelector('.transaction-list');
         if (!transactionList) return;
 
@@ -1322,9 +1484,17 @@ class BankingApp {
                     <p>Your transaction history will appear here once you start making deposits and transfers.</p>
                 </div>
             `;
+            this.hidePagination();
         } else {
+            // Implement pagination
+            const itemsPerPage = 20;
+            const totalPages = Math.ceil(allTransactions.length / itemsPerPage);
+            const startIndex = (page - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const paginatedTransactions = allTransactions.slice(startIndex, endIndex);
+
             // Show transactions with status indicators
-            transactionList.innerHTML = allTransactions.map(transaction => {
+            transactionList.innerHTML = paginatedTransactions.map(transaction => {
                 const statusClass = transaction.status || 'approved';
                 const statusIcon = this.getStatusIcon(statusClass);
                 const statusText = this.getStatusText(statusClass);
@@ -1349,13 +1519,119 @@ class BankingApp {
                     </div>
                 `;
             }).join('');
+
+            // Show pagination if there are multiple pages
+            if (totalPages > 1) {
+                this.showPagination(page, totalPages, allTransactions.length, startIndex + 1, Math.min(endIndex, allTransactions.length));
+            } else {
+                this.hidePagination();
+            }
         }
+        
         // Also reflect pay & transfer recent list
         this.renderRecentTransfers();
         // Refresh balance breakdown as pending/approved may have changed
         this.renderBalanceBreakdown();
         // Keep recent deposits list in sync
         this.renderRecentDeposits();
+    }
+
+    showPagination(currentPage, totalPages, totalItems, startItem, endItem) {
+        const paginationContainer = document.querySelector('.transaction-pagination');
+        const paginationText = document.getElementById('pagination-text');
+        const paginationPages = document.getElementById('pagination-pages');
+        const prevBtn = document.getElementById('prev-transactions');
+        const nextBtn = document.getElementById('next-transactions');
+
+        if (!paginationContainer) return;
+
+        // Show pagination container
+        paginationContainer.style.display = 'flex';
+
+        // Update pagination text
+        if (paginationText) {
+            paginationText.textContent = `Showing ${startItem}-${endItem} of ${totalItems} transactions`;
+        }
+
+        // Update navigation buttons
+        if (prevBtn) {
+            prevBtn.disabled = currentPage === 1;
+            prevBtn.onclick = () => {
+                if (currentPage > 1) {
+                    this.updateTransactionHistory(currentPage - 1);
+                }
+            };
+        }
+
+        if (nextBtn) {
+            nextBtn.disabled = currentPage === totalPages;
+            nextBtn.onclick = () => {
+                if (currentPage < totalPages) {
+                    this.updateTransactionHistory(currentPage + 1);
+                }
+            };
+        }
+
+        // Generate page numbers
+        if (paginationPages) {
+            const pageNumbers = this.generatePageNumbers(currentPage, totalPages);
+            paginationPages.innerHTML = pageNumbers.map(pageInfo => {
+                if (pageInfo.isEllipsis) {
+                    return `<span class="pagination-ellipsis">...</span>`;
+                } else {
+                    const activeClass = pageInfo.page === currentPage ? ' active' : '';
+                    return `<button class="pagination-page${activeClass}" onclick="bankingApp.updateTransactionHistory(${pageInfo.page})">${pageInfo.page}</button>`;
+                }
+            }).join('');
+        }
+    }
+
+    hidePagination() {
+        const paginationContainer = document.querySelector('.transaction-pagination');
+        if (paginationContainer) {
+            paginationContainer.style.display = 'none';
+        }
+    }
+
+    generatePageNumbers(currentPage, totalPages) {
+        const pages = [];
+        const maxVisiblePages = 5;
+
+        if (totalPages <= maxVisiblePages) {
+            // Show all pages if total is less than max visible
+            for (let i = 1; i <= totalPages; i++) {
+                pages.push({ page: i, isEllipsis: false });
+            }
+        } else {
+            // Show first page
+            pages.push({ page: 1, isEllipsis: false });
+
+            // Calculate start and end of visible range
+            let start = Math.max(2, currentPage - 1);
+            let end = Math.min(totalPages - 1, currentPage + 1);
+
+            // Add ellipsis before if needed
+            if (start > 2) {
+                pages.push({ isEllipsis: true });
+            }
+
+            // Add visible range
+            for (let i = start; i <= end; i++) {
+                pages.push({ page: i, isEllipsis: false });
+            }
+
+            // Add ellipsis after if needed
+            if (end < totalPages - 1) {
+                pages.push({ isEllipsis: true });
+            }
+
+            // Show last page
+            if (totalPages > 1) {
+                pages.push({ page: totalPages, isEllipsis: false });
+            }
+        }
+
+        return pages;
     }
 
     // Compute and render balance breakdown in Routing tab
@@ -5192,8 +5468,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     console.log('Banking App Initializing...');
 
-    const app = new BankingApp();
-    app.checkAuth();
+    // Make banking app globally accessible for pagination
+    window.bankingApp = new BankingApp();
+    window.bankingApp.checkAuth();
     addSwipeSupport();
     initializeScrollNavigation();
 

@@ -320,6 +320,9 @@ class AdminDashboard {
             });
         }
 
+        // Add bulk transaction generation functionality
+        this.setupBulkTransactionGeneration();
+
         // Action buttons
         this.setupActionButtons();
     }
@@ -360,6 +363,252 @@ class AdminDashboard {
                 this.handleUserAction(action, userName);
             });
         });
+    }
+
+    setupBulkTransactionGeneration() {
+        // Add a button to the admin interface for bulk generation
+        const settingsSection = document.getElementById('settings');
+        if (settingsSection && !document.getElementById('bulk-transaction-btn')) {
+            const bulkGenSection = document.createElement('div');
+            bulkGenSection.className = 'admin-card';
+            bulkGenSection.innerHTML = `
+                <div class="card-header">
+                    <h3><i class="fas fa-database"></i> Bulk Data Generation</h3>
+                </div>
+                <div class="card-content">
+                    <p>Generate comprehensive transaction histories and set high balances for all users.</p>
+                    <button id="bulk-transaction-btn" class="admin-btn primary">
+                        <i class="fas fa-magic"></i>
+                        Generate Rich Transaction History for All Users
+                    </button>
+                    <div id="bulk-generation-status" class="status-message" style="display: none; margin-top: 15px;"></div>
+                </div>
+            `;
+            
+            // Insert before other settings cards
+            const firstCard = settingsSection.querySelector('.admin-card');
+            if (firstCard) {
+                settingsSection.insertBefore(bulkGenSection, firstCard);
+            } else {
+                settingsSection.appendChild(bulkGenSection);
+            }
+        }
+
+        // Add click handler for bulk generation
+        const bulkBtn = document.getElementById('bulk-transaction-btn');
+        if (bulkBtn) {
+            bulkBtn.addEventListener('click', () => {
+                this.performBulkTransactionGeneration();
+            });
+        }
+    }
+
+    async performBulkTransactionGeneration() {
+        const statusDiv = document.getElementById('bulk-generation-status');
+        const bulkBtn = document.getElementById('bulk-transaction-btn');
+        
+        if (!statusDiv || !bulkBtn) return;
+        
+        // Show loading state
+        bulkBtn.disabled = true;
+        bulkBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+        statusDiv.style.display = 'block';
+        statusDiv.className = 'status-message info';
+        statusDiv.innerHTML = '<i class="fas fa-info-circle"></i> Starting bulk generation process...';
+        
+        try {
+            // Get all users
+            const bankingUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            let processedCount = 0;
+            
+            for (const user of bankingUsers) {
+                try {
+                    statusDiv.innerHTML = `<i class="fas fa-cog fa-spin"></i> Processing user ${processedCount + 1}/${bankingUsers.length}: ${user.name}`;
+                    
+                    // Generate transactions for this user
+                    await this.generateUserTransactionHistory(user);
+                    
+                    // Update balance to $40+ million
+                    await this.setUserHighBalance(user);
+                    
+                    processedCount++;
+                    
+                    // Small delay to show progress
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    
+                } catch (userError) {
+                    console.error(`Error processing user ${user.name}:`, userError);
+                }
+            }
+            
+            // Success message
+            statusDiv.className = 'status-message success';
+            statusDiv.innerHTML = `<i class="fas fa-check-circle"></i> Successfully generated rich transaction history for ${processedCount} users!`;
+            
+            // Refresh dashboard stats
+            this.updateStats();
+            
+        } catch (error) {
+            console.error('Bulk generation error:', error);
+            statusDiv.className = 'status-message error';
+            statusDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error during bulk generation. Check console for details.';
+        } finally {
+            // Reset button
+            bulkBtn.disabled = false;
+            bulkBtn.innerHTML = '<i class="fas fa-magic"></i> Generate Rich Transaction History for All Users';
+        }
+    }
+
+    async generateUserTransactionHistory(user) {
+        // Use the same transaction generation logic from the banking app
+        const userTransactionKey = `userTransactions_${user.accountNumber || user.id}`;
+        const existingTransactions = JSON.parse(localStorage.getItem(userTransactionKey) || '[]');
+        
+        // Only generate if user has less than 50 transactions
+        if (existingTransactions.length < 50) {
+            const transactions = this.generateBulkTransactions(user, 120);
+            localStorage.setItem(userTransactionKey, JSON.stringify(transactions));
+        }
+    }
+
+    async setUserHighBalance(user) {
+        // Set balance to $40+ million
+        const userBalanceKey = `userBalance_${user.accountNumber || user.id}`;
+        const baseAmount = 40000000; // $40 million base
+        const randomExtra = Math.floor(Math.random() * 20000000); // Up to $20M extra
+        const finalBalance = baseAmount + randomExtra;
+        
+        localStorage.setItem(userBalanceKey, finalBalance.toString());
+        
+        // Update user balance in banking users storage
+        const bankingUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+        const userIndex = bankingUsers.findIndex(u => u.email === user.email);
+        if (userIndex !== -1) {
+            bankingUsers[userIndex].balance = this.formatCurrency(finalBalance);
+            localStorage.setItem('bankingUsers', JSON.stringify(bankingUsers));
+        }
+    }
+
+    generateBulkTransactions(user, count = 120) {
+        const transactions = [];
+        const now = new Date();
+        
+        // Reuse the same transaction templates from the banking app
+        const transactionTemplates = [
+            // Deposits
+            { type: 'deposit', subType: 'wire_transfer', descriptions: ['International Wire Transfer', 'Domestic Wire Transfer', 'Business Wire Transfer'], amounts: [50000, 150000, 250000, 500000, 1000000] },
+            { type: 'deposit', subType: 'check_deposit', descriptions: ['Check Deposit', 'Business Check Deposit', 'Cashiers Check Deposit'], amounts: [25000, 75000, 125000, 200000] },
+            { type: 'deposit', subType: 'ach_transfer', descriptions: ['ACH Transfer', 'Direct Deposit', 'Electronic Transfer'], amounts: [15000, 35000, 85000, 150000] },
+            { type: 'deposit', subType: 'investment_return', descriptions: ['Investment Returns', 'Dividend Payment', 'Capital Gains', 'Bond Interest'], amounts: [100000, 250000, 500000, 750000] },
+            { type: 'deposit', subType: 'business_revenue', descriptions: ['Business Revenue', 'Contract Payment', 'Sales Revenue'], amounts: [200000, 400000, 800000, 1200000] },
+            { type: 'deposit', subType: 'real_estate', descriptions: ['Property Sale', 'Rental Income', 'Real Estate Investment'], amounts: [500000, 1000000, 2000000, 3000000] },
+            
+            // Withdrawals/Transfers
+            { type: 'withdrawal', subType: 'wire_transfer', descriptions: ['Outgoing Wire Transfer', 'International Wire', 'Business Payment'], amounts: [25000, 50000, 100000, 200000] },
+            { type: 'withdrawal', subType: 'investment', descriptions: ['Investment Purchase', 'Stock Purchase', 'Bond Purchase', 'Portfolio Investment'], amounts: [100000, 300000, 500000, 1000000] },
+            { type: 'withdrawal', subType: 'business_expense', descriptions: ['Business Expense', 'Operational Costs', 'Equipment Purchase'], amounts: [50000, 150000, 300000] },
+            { type: 'withdrawal', subType: 'real_estate', descriptions: ['Property Purchase', 'Real Estate Investment', 'Property Development'], amounts: [500000, 1500000, 2500000] },
+            { type: 'withdrawal', subType: 'loan_payment', descriptions: ['Loan Payment', 'Mortgage Payment', 'Credit Line Payment'], amounts: [25000, 75000, 150000] },
+            { type: 'withdrawal', subType: 'tax_payment', descriptions: ['Tax Payment', 'Quarterly Tax Payment', 'Annual Tax Payment'], amounts: [100000, 250000, 500000] }
+        ];
+
+        const companies = [
+            'Goldman Sachs', 'JP Morgan Chase', 'Morgan Stanley', 'Bank of America', 'Wells Fargo',
+            'Citigroup', 'BlackRock Inc', 'Vanguard Group', 'State Street Corp', 'Fidelity Investments',
+            'Charles Schwab', 'American Express', 'Capital One', 'PNC Financial', 'TD Bank',
+            'Apple Inc', 'Microsoft Corp', 'Amazon.com Inc', 'Google LLC', 'Meta Platforms',
+            'Tesla Inc', 'NVIDIA Corp', 'Berkshire Hathaway', 'Johnson & Johnson', 'Exxon Mobil',
+            'Procter & Gamble', 'Walmart Inc', 'Home Depot Inc', 'Mastercard Inc', 'Visa Inc',
+            'Coca-Cola Company', 'PepsiCo Inc', 'McDonald\'s Corp', 'Disney Company', 'Netflix Inc',
+            'Adobe Systems', 'Oracle Corp', 'Salesforce Inc', 'Intel Corp', 'IBM Corp',
+            'Real Estate Holdings LLC', 'Property Investment Group', 'Commercial Real Estate Fund',
+            'Hedge Fund Management', 'Private Equity Partners', 'Investment Advisory Services'
+        ];
+
+        const locations = [
+            'New York, NY', 'Los Angeles, CA', 'Chicago, IL', 'Houston, TX', 'Phoenix, AZ',
+            'Philadelphia, PA', 'San Antonio, TX', 'San Diego, CA', 'Dallas, TX', 'San Jose, CA',
+            'Austin, TX', 'Jacksonville, FL', 'Fort Worth, TX', 'Columbus, OH', 'Charlotte, NC',
+            'San Francisco, CA', 'Indianapolis, IN', 'Seattle, WA', 'Denver, CO', 'Washington, DC',
+            'Boston, MA', 'El Paso, TX', 'Nashville, TN', 'Detroit, MI', 'Oklahoma City, OK',
+            'London, UK', 'Tokyo, Japan', 'Hong Kong', 'Singapore', 'Zurich, Switzerland',
+            'Dubai, UAE', 'Sydney, Australia', 'Toronto, Canada', 'Frankfurt, Germany', 'Paris, France'
+        ];
+
+        for (let i = 0; i < count; i++) {
+            const template = transactionTemplates[Math.floor(Math.random() * transactionTemplates.length)];
+            const amount = template.amounts[Math.floor(Math.random() * template.amounts.length)];
+            const description = template.descriptions[Math.floor(Math.random() * template.descriptions.length)];
+            const company = companies[Math.floor(Math.random() * companies.length)];
+            const location = locations[Math.floor(Math.random() * locations.length)];
+            
+            // Generate date within last 2 years
+            const daysBack = Math.floor(Math.random() * 730); // 2 years
+            const transactionDate = new Date(now.getTime() - (daysBack * 24 * 60 * 60 * 1000));
+            
+            // Add some variation to amounts
+            const finalAmount = amount + (Math.random() * 10000) - 5000;
+            const roundedAmount = Math.max(1000, Math.round(finalAmount / 100) * 100); // Round to nearest $100, min $1000
+            
+            const transaction = {
+                id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                accountNumber: user.accountNumber,
+                type: template.type,
+                subType: template.subType,
+                amount: roundedAmount,
+                description: `${description} - ${company}`,
+                recipient: template.type === 'deposit' ? user.name : company,
+                sender: template.type === 'deposit' ? company : user.name,
+                date: transactionDate.toLocaleDateString(),
+                time: transactionDate.toLocaleTimeString(),
+                timestamp: transactionDate.toISOString(),
+                status: 'approved',
+                method: template.subType,
+                location: location,
+                reference: `REF${Math.random().toString(36).substr(2, 8).toUpperCase()}`,
+                confirmationNumber: `CNF${Math.random().toString(36).substr(2, 10).toUpperCase()}`,
+                fee: template.type === 'withdrawal' ? Math.floor(Math.random() * 50) + 10 : 0,
+                category: this.getTransactionCategory(template.subType),
+                balance_after: 0
+            };
+            
+            transactions.push(transaction);
+        }
+        
+        // Sort by date (oldest first) to calculate running balance
+        transactions.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        // Calculate running balance
+        let runningBalance = 5000000; // Start with $5M
+        transactions.forEach(transaction => {
+            if (transaction.type === 'deposit') {
+                runningBalance += transaction.amount;
+            } else {
+                runningBalance -= transaction.amount;
+            }
+            transaction.balance_after = runningBalance;
+        });
+        
+        // Sort by date (newest first) for display
+        transactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        return transactions;
+    }
+
+    getTransactionCategory(subType) {
+        const categories = {
+            'wire_transfer': 'Transfer',
+            'check_deposit': 'Deposit',
+            'ach_transfer': 'Transfer',
+            'investment_return': 'Investment',
+            'business_revenue': 'Business',
+            'real_estate': 'Real Estate',
+            'investment': 'Investment',
+            'business_expense': 'Business',
+            'loan_payment': 'Loan',
+            'tax_payment': 'Tax'
+        };
+        return categories[subType] || 'Other';
     }
 
     // Load Dashboard Data

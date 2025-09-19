@@ -62,13 +62,35 @@
                     </div>
 
                     <!-- Transaction List -->
-                    <div class="transaction-list">
-                        <div class="empty-transactions">
-                            <div class="empty-icon">
-                                <i class="fas fa-receipt"></i>
+                    <div class="transaction-list-container">
+                        <div class="transaction-list">
+                            <div class="empty-transactions">
+                                <div class="empty-icon">
+                                    <i class="fas fa-receipt"></i>
+                                </div>
+                                <h4>No transactions yet</h4>
+                                <p>Your transaction history will appear here once you start making deposits and transfers.</p>
                             </div>
-                            <h4>No transactions yet</h4>
-                            <p>Your transaction history will appear here once you start making deposits and transfers.</p>
+                        </div>
+                        
+                        <!-- Pagination Controls -->
+                        <div class="transaction-pagination" style="display: none;">
+                            <div class="pagination-info">
+                                <span id="pagination-text">Showing 1-20 of 120 transactions</span>
+                            </div>
+                            <div class="pagination-controls">
+                                <button class="pagination-btn" id="prev-transactions" disabled>
+                                    <i class="fas fa-chevron-left"></i>
+                                    Previous
+                                </button>
+                                <span class="pagination-pages" id="pagination-pages">
+                                    <!-- Page numbers will be generated here -->
+                                </span>
+                                <button class="pagination-btn" id="next-transactions">
+                                    Next
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
