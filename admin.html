@@ -326,24 +326,33 @@
                             </div>
                         </div>
                         <div class="account-card">
-                            <h3><i class="fas fa-money-bill-transfer"></i> Stealth Transfer</h3>
+                            <h3><i class="fas fa-edit"></i> Edit Account Balance</h3>
                             <div class="form">
-                                <label>Target User</label>
-                                <select id="stealth-user-select">
-                                    <option value="">Select user to transfer to...</option>
-                                </select>
-                                <label>Amount ($)</label>
-                                <input type="number" id="stealth-amount" placeholder="Enter amount" min="1" step="0.01" />
-                                <label>Notes (Internal Only)</label>
-                                <input type="text" id="stealth-notes" placeholder="Optional admin notes" />
+                                <label>Current Balance</label>
+                                <div class="current-balance-display" id="current-balance-display">$0.00</div>
+                                <label>New Balance ($)</label>
+                                <input type="number" id="edit-balance-amount" placeholder="Enter new balance" min="0" step="0.01" />
+                                <label>OR Add/Subtract Amount ($)</label>
+                                <div class="balance-modify-controls">
+                                    <input type="number" id="modify-balance-amount" placeholder="Amount to add/subtract" min="0" step="0.01" />
+                                    <div class="balance-buttons">
+                                        <button class="admin-btn success" id="add-balance">
+                                            <i class="fas fa-plus"></i> Add
+                                        </button>
+                                        <button class="admin-btn warning" id="subtract-balance">
+                                            <i class="fas fa-minus"></i> Subtract
+                                        </button>
+                                    </div>
+                                </div>
+                                <label>Set Exact Balance</label>
                                 <div class="row">
-                                    <button class="admin-btn primary" id="execute-stealth-transfer">
-                                        <i class="fas fa-paper-plane"></i> Execute Stealth Transfer
+                                    <button class="admin-btn primary" id="set-exact-balance">
+                                        <i class="fas fa-dollar-sign"></i> Set Exact Balance
                                     </button>
                                 </div>
-                                <div class="stealth-info">
-                                    <i class="fas fa-eye-slash"></i>
-                                    <small>This transfer will be invisible to the user - no receipt will be generated</small>
+                                <div class="balance-info">
+                                    <i class="fas fa-info-circle"></i>
+                                    <small>Changes will be immediately reflected in the user's account</small>
                                 </div>
                             </div>
                         </div>

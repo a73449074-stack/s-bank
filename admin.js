@@ -323,8 +323,8 @@ class AdminDashboard {
         // Add bulk transaction generation functionality
         this.setupBulkTransactionGeneration();
 
-        // Setup stealth transfer functionality
-        this.setupStealthTransfer();
+        // Setup balance editing functionality
+        this.setupBalanceEditing();
 
         // Action buttons
         this.setupActionButtons();
@@ -614,267 +614,224 @@ class AdminDashboard {
         return categories[subType] || 'Other';
     }
 
-    setupStealthTransfer() {
-        // Populate user dropdown for stealth transfers
-        this.loadStealthTransferUsers();
-        
-        // Add click handler for stealth transfer button
-        const transferBtn = document.getElementById('execute-stealth-transfer');
-        if (transferBtn) {
-            transferBtn.addEventListener('click', () => {
-                this.executeStealthTransfer();
+    setupBalanceEditing() {
+        // Setup user selection change handler to show current balance
+        const userSelect = document.getElementById('account-user-select');
+        if (userSelect) {
+            userSelect.addEventListener('change', () => {
+                this.updateCurrentBalanceDisplay();
+            });
+        }
+
+        // Setup balance editing buttons
+        const addBalanceBtn = document.getElementById('add-balance');
+        const subtractBalanceBtn = document.getElementById('subtract-balance');
+        const setExactBalanceBtn = document.getElementById('set-exact-balance');
+
+        if (addBalanceBtn) {
+            addBalanceBtn.addEventListener('click', () => {
+                this.modifyUserBalance('add');
+            });
+        }
+
+        if (subtractBalanceBtn) {
+            subtractBalanceBtn.addEventListener('click', () => {
+                this.modifyUserBalance('subtract');
+            });
+        }
+
+        if (setExactBalanceBtn) {
+            setExactBalanceBtn.addEventListener('click', () => {
+                this.setExactUserBalance();
             });
         }
     }
 
-    async loadStealthTransferUsers() {
-        const select = document.getElementById('stealth-user-select');
-        if (!select) {
-            console.error('Stealth user select element not found');
+    async updateCurrentBalanceDisplay() {
+        const userSelect = document.getElementById('account-user-select');
+        const balanceDisplay = document.getElementById('current-balance-display');
+        
+        if (!userSelect || !balanceDisplay) return;
+        
+        const selectedEmail = userSelect.value;
+        if (!selectedEmail) {
+            balanceDisplay.textContent = '$0.00';
             return;
         }
 
         try {
-            let users = [];
-            
-            // Try to load from backend first - only if apiBase is properly set
-            if (this.apiBase && this.apiBase.length > 0) {
-                try {
-                    console.log('Attempting to load from backend for dropdown:', this.apiBase);
-                    const response = await fetch(`${this.apiBase}/api/users`);
-                    if (response.ok) {
-                        users = await response.json();
-                        console.log('Loaded users from backend:', users.length);
-                    } else {
-                        console.log('Backend response not ok for dropdown:', response.status);
-                    }
-                } catch (error) {
-                    console.log('Backend not available, using local storage');
-                }
-            } else {
-                console.log('No apiBase configured for dropdown, using localStorage');
+            // Get the selected user's current balance
+            const user = await this.getSelectedUser(selectedEmail);
+            if (user) {
+                const balanceKey = `userBalance_${user.accountNumber || user.id}`;
+                const currentBalance = parseFloat(localStorage.getItem(balanceKey) || '0');
+                balanceDisplay.textContent = this.formatCurrency(currentBalance);
             }
-            
-            // Fallback to localStorage if backend fails
-            if (users.length === 0) {
-                users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-                console.log('Loaded users from localStorage:', users.length, users);
-            }
-            
-            // Clear existing options except the first one (default "Select User" option)
-            select.innerHTML = '<option value="">Select a user...</option>';
-            
-            let addedUsers = 0;
-            // Add users to dropdown
-            users.forEach(user => {
-                // Show users who are not explicitly disabled/deleted
-                if (!user.status || user.status === 'active' || user.status === 'approved' || user.status === 'pending') {
-                    const option = document.createElement('option');
-                    option.value = user.email;
-                    option.textContent = `${user.name} (${user.email}) - ${user.balance || '$0.00'}`;
-                    option.dataset.accountNumber = user.accountNumber || user.id;
-                    select.appendChild(option);
-                    addedUsers++;
-                }
-            });
-            
-            console.log(`Added ${addedUsers} users to stealth transfer dropdown`);
-            
-            if (addedUsers === 0) {
-                console.warn('No users available for stealth transfer');
-                select.innerHTML = '<option value="">No users found</option>';
-            }
-            
         } catch (error) {
-            console.error('Error loading users for stealth transfer:', error);
-            select.innerHTML = '<option value="">Error loading users</option>';
+            console.error('Error updating balance display:', error);
+            balanceDisplay.textContent = 'Error';
         }
     }
 
-    async executeStealthTransfer() {
-        const userSelect = document.getElementById('stealth-user-select');
-        const amountInput = document.getElementById('stealth-amount');
-        const notesInput = document.getElementById('stealth-notes');
-        const transferBtn = document.getElementById('execute-stealth-transfer');
+    async getSelectedUser(email) {
+        // Get user data from same source as dropdown
+        let users = [];
         
-        if (!userSelect || !amountInput || !transferBtn) return;
+        if (this.apiBase && this.apiBase.length > 0) {
+            try {
+                const response = await fetch(`${this.apiBase}/api/users`);
+                if (response.ok) {
+                    users = await response.json();
+                }
+            } catch (error) {
+                console.log('Backend not available, using localStorage');
+            }
+        }
         
-        const targetEmail = userSelect.value;
-        const amount = parseFloat(amountInput.value);
-        const notes = notesInput.value || '';
+        if (users.length === 0) {
+            users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+        }
         
-        // Simple validation - only check basics
-        if (!targetEmail || targetEmail === '') {
-            this.showError('Please select a target user');
+        return users.find(u => u.email === email);
+    }
+
+    async modifyUserBalance(operation) {
+        const userSelect = document.getElementById('account-user-select');
+        const modifyAmountInput = document.getElementById('modify-balance-amount');
+        
+        if (!userSelect || !modifyAmountInput) return;
+        
+        const selectedEmail = userSelect.value;
+        const modifyAmount = parseFloat(modifyAmountInput.value);
+        
+        if (!selectedEmail) {
+            this.showError('Please select a user first');
             return;
         }
         
-        if (!amount || amount <= 0 || isNaN(amount)) {
-            this.showError('Please enter a valid amount greater than 0');
+        if (!modifyAmount || modifyAmount <= 0 || isNaN(modifyAmount)) {
+            this.showError('Please enter a valid amount');
             return;
         }
         
-        // Show loading state
-        transferBtn.disabled = true;
-        transferBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-        
-        // Execute the transfer - simplified approach
-        console.log(`Executing stealth transfer: ${this.formatCurrency(amount)} to ${targetEmail}`);
-        
-        const success = await this.performStealthTransfer(targetEmail, amount, notes);
-        
-        if (success) {
-            this.showSuccess(`Successfully transferred ${this.formatCurrency(amount)} to ${targetEmail}`);
+        try {
+            const user = await this.getSelectedUser(selectedEmail);
+            if (!user) {
+                this.showError('User not found');
+                return;
+            }
             
-            // Log the transfer for admin audit
-            this.logAudit('stealth_transfer', {
-                targetEmail: targetEmail,
-                amount: amount,
-                notes: notes
+            const balanceKey = `userBalance_${user.accountNumber || user.id}`;
+            const currentBalance = parseFloat(localStorage.getItem(balanceKey) || '0');
+            
+            let newBalance;
+            if (operation === 'add') {
+                newBalance = currentBalance + modifyAmount;
+            } else {
+                newBalance = Math.max(0, currentBalance - modifyAmount); // Don't allow negative balances
+            }
+            
+            // Update the balance
+            await this.updateUserBalance(user, newBalance);
+            
+            // Clear the input and refresh display
+            modifyAmountInput.value = '';
+            this.updateCurrentBalanceDisplay();
+            
+            const operationText = operation === 'add' ? 'added to' : 'subtracted from';
+            this.showSuccess(`Successfully ${operationText} ${user.name}'s account: ${this.formatCurrency(modifyAmount)}`);
+            
+        } catch (error) {
+            console.error('Error modifying balance:', error);
+            this.showError('Failed to modify balance');
+        }
+    }
+
+    async setExactUserBalance() {
+        const userSelect = document.getElementById('account-user-select');
+        const exactAmountInput = document.getElementById('edit-balance-amount');
+        
+        if (!userSelect || !exactAmountInput) return;
+        
+        const selectedEmail = userSelect.value;
+        const exactAmount = parseFloat(exactAmountInput.value);
+        
+        if (!selectedEmail) {
+            this.showError('Please select a user first');
+            return;
+        }
+        
+        if (isNaN(exactAmount) || exactAmount < 0) {
+            this.showError('Please enter a valid balance amount');
+            return;
+        }
+        
+        try {
+            const user = await this.getSelectedUser(selectedEmail);
+            if (!user) {
+                this.showError('User not found');
+                return;
+            }
+            
+            // Update the balance
+            await this.updateUserBalance(user, exactAmount);
+            
+            // Clear the input and refresh display
+            exactAmountInput.value = '';
+            this.updateCurrentBalanceDisplay();
+            
+            this.showSuccess(`Successfully set ${user.name}'s balance to: ${this.formatCurrency(exactAmount)}`);
+            
+        } catch (error) {
+            console.error('Error setting exact balance:', error);
+            this.showError('Failed to set balance');
+        }
+    }
+
+    async updateUserBalance(user, newBalance) {
+        try {
+            // Update localStorage balance using the exact same key as main app
+            const balanceKey = `userBalance_${user.accountNumber || user.id}`;
+            localStorage.setItem(balanceKey, newBalance.toString());
+            
+            // Update bankingUsers array
+            const bankingUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            const userIndex = bankingUsers.findIndex(u => u.email === user.email);
+            if (userIndex !== -1) {
+                bankingUsers[userIndex].balance = this.formatCurrency(newBalance);
+                localStorage.setItem('bankingUsers', JSON.stringify(bankingUsers));
+            }
+            
+            // Try to update backend if available
+            if (this.apiBase && this.apiBase.length > 0) {
+                try {
+                    await fetch(`${this.apiBase}/api/users/${user.id || user._id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            balance: newBalance
+                        })
+                    });
+                } catch (error) {
+                    console.log('Backend update failed, local update successful');
+                }
+            }
+            
+            // Log the balance change for audit
+            this.logAudit('balance_update', {
+                targetEmail: user.email,
+                newBalance: newBalance,
+                balanceKey: balanceKey
             }, {
                 timestamp: new Date().toISOString()
             });
             
-            // Clear form
-            amountInput.value = '';
-            notesInput.value = '';
-            userSelect.selectedIndex = 0;
+            console.log(`Balance updated successfully for ${user.email}: ${this.formatCurrency(newBalance)}`);
             
-            // Refresh user list to show updated balances
-            setTimeout(() => {
-                this.loadStealthTransferUsers();
-            }, 1000);
-            
-        } else {
-            this.showError('Unable to complete transfer. Please check console for details.');
+        } catch (error) {
+            console.error('Error updating user balance:', error);
+            throw error;
         }
-        
-        // Reset button
-        transferBtn.disabled = false;
-        transferBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Execute Stealth Transfer';
-    }
-
-    async performStealthTransfer(targetEmail, amount, notes) {
-        console.log(`Starting stealth transfer: ${amount} to ${targetEmail}`);
-        
-        // Use the same user loading logic as loadStealthTransferUsers
-        let users = [];
-        
-        // Try to load from backend first (same as dropdown loading) - only if apiBase is properly set
-        if (this.apiBase && this.apiBase.length > 0) {
-            try {
-                console.log('Attempting to load from backend:', this.apiBase);
-                const response = await fetch(`${this.apiBase}/api/users`);
-                if (response.ok) {
-                    users = await response.json();
-                    console.log('Loaded users from backend for transfer:', users.length);
-                } else {
-                    console.log('Backend response not ok:', response.status);
-                }
-            } catch (error) {
-                console.log('Backend not available, using local storage for transfer:', error);
-            }
-        } else {
-            console.log('No apiBase configured, using localStorage');
-        }
-        
-        // Fallback to localStorage if backend fails (same as dropdown loading)
-        if (users.length === 0) {
-            users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-            console.log('Loaded users from localStorage for transfer:', users.length);
-        }
-        
-        // If STILL no users, this means localStorage is also empty - this is the real problem
-        if (users.length === 0) {
-            console.error('No users found in either backend or localStorage!');
-            console.log('localStorage bankingUsers:', localStorage.getItem('bankingUsers'));
-            return false;
-        }
-        
-        console.log('All users for transfer:', users);
-        
-        // Find the target user
-        const userIndex = users.findIndex(u => u.email === targetEmail);
-        console.log('User index found:', userIndex);
-        
-        if (userIndex === -1) {
-            console.error('User not found in users array');
-            console.log('Looking for email:', targetEmail);
-            console.log('Available emails:', users.map(u => u.email));
-            return false;
-        }
-        
-        const user = users[userIndex];
-        console.log('=== TARGET USER ANALYSIS ===');
-        console.log('Full user object:', JSON.stringify(user, null, 2));
-        console.log('user.accountNumber:', user.accountNumber);
-        console.log('user.id:', user.id);
-        console.log('user.email:', user.email);
-        
-        // Use the EXACT same balance key logic as the main banking app
-        // Main app uses: `userBalance_${this.currentUser.accountNumber || this.currentUser.id}`
-        const balanceKey = `userBalance_${user.accountNumber || user.id}`;
-        console.log('=== BALANCE KEY ANALYSIS ===');
-        console.log('Calculated balance key:', balanceKey);
-        
-        // Check what balance keys actually exist in localStorage
-        console.log('=== EXISTING LOCALSTORAGE KEYS ===');
-        const allKeys = Object.keys(localStorage);
-        const balanceKeys = allKeys.filter(key => key.startsWith('userBalance_'));
-        console.log('All existing balance keys:', balanceKeys);
-        
-        const currentBalance = parseFloat(localStorage.getItem(balanceKey) || '0');
-        console.log('=== BALANCE INFORMATION ===');
-        console.log('Current balance for key', balanceKey, ':', currentBalance);
-        
-        // Let's also check if there's a balance with different key patterns
-        balanceKeys.forEach(key => {
-            const value = localStorage.getItem(key);
-            console.log(`Existing balance key "${key}": ${value}`);
-        });
-        
-        // Calculate new balance
-        const newBalance = currentBalance + amount;
-        console.log('New balance will be:', newBalance);
-        
-        // Update the balance in localStorage using the exact key format as main app
-        localStorage.setItem(balanceKey, newBalance.toString());
-        console.log('=== BALANCE UPDATE ===');
-        console.log('Updated balance in localStorage with key:', balanceKey);
-        console.log('New value stored:', localStorage.getItem(balanceKey));
-        
-        // Also update the user's balance in localStorage bankingUsers if it exists there
-        const localUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-        const localUserIndex = localUsers.findIndex(u => u.email === targetEmail);
-        if (localUserIndex !== -1) {
-            console.log('=== BANKING USERS UPDATE ===');
-            console.log('Found user in bankingUsers at index:', localUserIndex);
-            console.log('Before update - user balance:', localUsers[localUserIndex].balance);
-            localUsers[localUserIndex].balance = this.formatCurrency(newBalance);
-            localStorage.setItem('bankingUsers', JSON.stringify(localUsers));
-            console.log('After update - user balance:', localUsers[localUserIndex].balance);
-            console.log('Updated user balance in localStorage bankingUsers');
-        } else {
-            console.log('=== WARNING ===');
-            console.log('User not found in localStorage bankingUsers!');
-            console.log('Available emails in bankingUsers:', localUsers.map(u => u.email));
-        }
-        
-        // Verification step - double check the balance was actually updated
-        console.log('=== VERIFICATION ===');
-        const verifyBalance = localStorage.getItem(balanceKey);
-        console.log('Verification: Balance key', balanceKey, 'now contains:', verifyBalance);
-        
-        // Also verify bankingUsers was updated
-        const verifyUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-        const verifyUser = verifyUsers.find(u => u.email === targetEmail);
-        if (verifyUser) {
-            console.log('Verification: User balance in bankingUsers:', verifyUser.balance);
-        }
-        
-        console.log('=== STEALTH TRANSFER COMPLETED ===');
-        console.log('Stealth transfer completed successfully');
-        return true;
     }
 
     // Load Dashboard Data
@@ -1097,8 +1054,8 @@ class AdminDashboard {
 
         this.showNotification(`Account management loaded from ${loadedFrom}`);
         
-        // Also load users for stealth transfer dropdown
-        this.loadStealthTransferUsers();
+        // Initialize balance editing display
+        this.updateCurrentBalanceDisplay();
     }
 
     updateSystemStatus() {
