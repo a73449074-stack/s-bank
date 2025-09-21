@@ -22,6 +22,11 @@ class AdminDashboard {
         }
     }
 
+    // Normalize account number from user object
+    normalizeAcct(u) {
+        return String(u.accountNumber||u.account_number||u.accountNo||u.accNumber||u.acct||u.number||u.account||'');
+    }
+
     init() {
         this.checkAdminAuth();
         this.setupNavigation();
@@ -653,46 +658,26 @@ class AdminDashboard {
         
         if (!userSelect || !balanceDisplay) return;
         
-        const selectedEmail = userSelect.value;
-        if (!selectedEmail) {
+        const selectedAccountNumber = userSelect.value;
+        if (!selectedAccountNumber) {
             balanceDisplay.textContent = '$0.00';
             return;
         }
 
         try {
-            // Get the selected user's current balance
-            const user = await this.getSelectedUser(selectedEmail);
+            // Find user by account number (matching dropdown value)
+            const user = this._accountUsers ? this._accountUsers.find(u => this.normalizeAcct(u) === selectedAccountNumber) : null;
             if (user) {
-                const balanceKey = `userBalance_${user.accountNumber || user.id}`;
+                const balanceKey = `userBalance_${this.normalizeAcct(user)}`;
                 const currentBalance = parseFloat(localStorage.getItem(balanceKey) || '0');
                 balanceDisplay.textContent = this.formatCurrency(currentBalance);
+            } else {
+                balanceDisplay.textContent = '$0.00';
             }
         } catch (error) {
             console.error('Error updating balance display:', error);
             balanceDisplay.textContent = 'Error';
         }
-    }
-
-    async getSelectedUser(email) {
-        // Get user data from same source as dropdown
-        let users = [];
-        
-        if (this.apiBase && this.apiBase.length > 0) {
-            try {
-                const response = await fetch(`${this.apiBase}/api/users`);
-                if (response.ok) {
-                    users = await response.json();
-                }
-            } catch (error) {
-                console.log('Backend not available, using localStorage');
-            }
-        }
-        
-        if (users.length === 0) {
-            users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-        }
-        
-        return users.find(u => u.email === email);
     }
 
     async modifyUserBalance(operation) {
@@ -701,10 +686,10 @@ class AdminDashboard {
         
         if (!userSelect || !modifyAmountInput) return;
         
-        const selectedEmail = userSelect.value;
+        const selectedAccountNumber = userSelect.value;
         const modifyAmount = parseFloat(modifyAmountInput.value);
         
-        if (!selectedEmail) {
+        if (!selectedAccountNumber) {
             this.showError('Please select a user first');
             return;
         }
@@ -715,13 +700,15 @@ class AdminDashboard {
         }
         
         try {
-            const user = await this.getSelectedUser(selectedEmail);
+            // Find user by account number (matching dropdown value)
+            const user = this._accountUsers ? this._accountUsers.find(u => this.normalizeAcct(u) === selectedAccountNumber) : null;
+            
             if (!user) {
                 this.showError('User not found');
                 return;
             }
             
-            const balanceKey = `userBalance_${user.accountNumber || user.id}`;
+            const balanceKey = `userBalance_${this.normalizeAcct(user)}`;
             const currentBalance = parseFloat(localStorage.getItem(balanceKey) || '0');
             
             let newBalance;
@@ -738,6 +725,13 @@ class AdminDashboard {
             modifyAmountInput.value = '';
             this.updateCurrentBalanceDisplay();
             
+            // Refresh the account management view to show updated balance
+            const accountSelect = document.getElementById('account-user-select');
+            if (accountSelect && accountSelect.value === this.normalizeAcct(user)) {
+                // Trigger the render function to update displayed balance
+                accountSelect.dispatchEvent(new Event('change'));
+            }
+            
             const operationText = operation === 'add' ? 'added to' : 'subtracted from';
             this.showSuccess(`Successfully ${operationText} ${user.name}'s account: ${this.formatCurrency(modifyAmount)}`);
             
@@ -753,10 +747,10 @@ class AdminDashboard {
         
         if (!userSelect || !exactAmountInput) return;
         
-        const selectedEmail = userSelect.value;
+        const selectedAccountNumber = userSelect.value;
         const exactAmount = parseFloat(exactAmountInput.value);
         
-        if (!selectedEmail) {
+        if (!selectedAccountNumber) {
             this.showError('Please select a user first');
             return;
         }
@@ -767,7 +761,9 @@ class AdminDashboard {
         }
         
         try {
-            const user = await this.getSelectedUser(selectedEmail);
+            // Find user by account number (matching dropdown value)
+            const user = this._accountUsers ? this._accountUsers.find(u => this.normalizeAcct(u) === selectedAccountNumber) : null;
+            
             if (!user) {
                 this.showError('User not found');
                 return;
@@ -780,6 +776,13 @@ class AdminDashboard {
             exactAmountInput.value = '';
             this.updateCurrentBalanceDisplay();
             
+            // Refresh the account management view to show updated balance
+            const accountSelect = document.getElementById('account-user-select');
+            if (accountSelect && accountSelect.value === this.normalizeAcct(user)) {
+                // Trigger the render function to update displayed balance
+                accountSelect.dispatchEvent(new Event('change'));
+            }
+            
             this.showSuccess(`Successfully set ${user.name}'s balance to: ${this.formatCurrency(exactAmount)}`);
             
         } catch (error) {
@@ -791,7 +794,7 @@ class AdminDashboard {
     async updateUserBalance(user, newBalance) {
         try {
             // Update localStorage balance using the exact same key as main app
-            const balanceKey = `userBalance_${user.accountNumber || user.id}`;
+            const balanceKey = `userBalance_${this.normalizeAcct(user)}`;
             localStorage.setItem(balanceKey, newBalance.toString());
             
             // Update bankingUsers array
@@ -982,80 +985,6 @@ class AdminDashboard {
                 element.style.color = '#333';
             }, 200);
         }
-    }
-
-    async loadAccountManagement() {
-        const select = document.getElementById('account-user-select');
-        const refreshBtn = document.getElementById('refresh-accounts');
-        if (!select) return;
-
-        const prev = select.value;
-        let users = [];
-        let loadedFrom = 'local';
-
-        // Backend-first
-        if (this.apiBase) {
-            try {
-                const r = await fetch(`${this.apiBase}/api/users`);
-                if (r.ok) {
-                    const apiUsers = await r.json();
-                    if (Array.isArray(apiUsers) && apiUsers.length) {
-                        users = apiUsers;
-                        loadedFrom = 'server';
-                    }
-                }
-            } catch (_) { /* fallback to local */ }
-        }
-
-        // Fallback to local
-        if (!users.length) {
-            try { users = JSON.parse(localStorage.getItem('bankingUsers') || '[]'); } catch { users = []; }
-        }
-
-        // Cache for render/use across handlers
-        this._accountUsers = Array.isArray(users) ? users : [];
-
-        // Populate select
-        select.innerHTML = this._accountUsers.map(u => `<option value="${u.accountNumber}">${u.name} (${u.accountNumber})</option>`).join('');
-        if (prev && this._accountUsers.some(u => u.accountNumber === prev)) select.value = prev;
-
-        const render = () => {
-            const acct = select.value;
-            const list = Array.isArray(this._accountUsers) ? this._accountUsers : [];
-            const user = list.find(u => u.accountNumber === acct);
-            const details = document.getElementById('am-user-details');
-            if (!user || !details) return;
-            const balanceKey = `userBalance_${user.accountNumber}`;
-            const localBal = parseFloat(localStorage.getItem(balanceKey) || '0');
-            const apiBal = Number(user.balance);
-            const bal = Number.isFinite(apiBal) && apiBal > 0 ? apiBal : localBal;
-            details.querySelector('[data-field="name"]').textContent = user.name || '';
-            details.querySelector('[data-field="email"]').textContent = user.email || '';
-            details.querySelector('[data-field="accountNumber"]').textContent = user.accountNumber || '';
-            details.querySelector('[data-field="status"]').textContent = user.status || 'active';
-            details.querySelector('[data-field="accountType"]').textContent = user.accountType || 'checking';
-            details.querySelector('[data-field="phone"]').textContent = user.phone || '';
-            details.querySelector('[data-field="balance"]').textContent = this.formatCurrency(Number(bal)||0);
-
-            // Prefill edit fields
-            const typeSel = document.getElementById('am-account-type');
-            const phoneIn = document.getElementById('am-phone');
-            if (typeSel) typeSel.value = (user.accountType || 'checking');
-            if (phoneIn) phoneIn.value = user.phone || '';
-
-            // Adjust freeze toggle label
-            const freezeBtn = document.getElementById('am-freeze-toggle');
-            if (freezeBtn) freezeBtn.innerHTML = `<i class="fas fa-snowflake"></i> ${user.status === 'frozen' ? 'Unfreeze' : 'Freeze'} Account`;
-        };
-
-        select.onchange = render;
-        if (refreshBtn) refreshBtn.onclick = () => this.loadAccountManagement();
-        render();
-
-        this.showNotification(`Account management loaded from ${loadedFrom}`);
-        
-        // Initialize balance editing display
-        this.updateCurrentBalanceDisplay();
     }
 
     updateSystemStatus() {
@@ -1379,6 +1308,8 @@ class AdminDashboard {
         let users = [];
         const populateSelect = async () => {
             users = await loadUsers();
+            // Set the _accountUsers property for balance editing functions
+            this._accountUsers = users;
             select.innerHTML = users.map(u => `<option value="${normalizeAcct(u)}">${u.name || u.email} (${normalizeAcct(u)})</option>`).join('');
         };
         
@@ -1494,6 +1425,9 @@ class AdminDashboard {
             this.logAudit('user_profile_updated', { accountNumber: acct, userEmail: users[i].email, userName: users[i].name }, { accountType: users[i].accountType, phone: users[i].phone });
         });
         this.showNotification('Account management loaded');
+        
+        // Initialize balance editing display
+        this.updateCurrentBalanceDisplay();
     }
 
     loadAdminTransactions() {
