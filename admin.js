@@ -637,17 +637,22 @@ class AdminDashboard {
         try {
             let users = [];
             
-            // Try to load from backend first
-            if (this.apiBase) {
+            // Try to load from backend first - only if apiBase is properly set
+            if (this.apiBase && this.apiBase.length > 0) {
                 try {
+                    console.log('Attempting to load from backend for dropdown:', this.apiBase);
                     const response = await fetch(`${this.apiBase}/api/users`);
                     if (response.ok) {
                         users = await response.json();
                         console.log('Loaded users from backend:', users.length);
+                    } else {
+                        console.log('Backend response not ok for dropdown:', response.status);
                     }
                 } catch (error) {
                     console.log('Backend not available, using local storage');
                 }
+            } else {
+                console.log('No apiBase configured for dropdown, using localStorage');
             }
             
             // Fallback to localStorage if backend fails
@@ -755,23 +760,35 @@ class AdminDashboard {
         // Use the same user loading logic as loadStealthTransferUsers
         let users = [];
         
-        // Try to load from backend first (same as dropdown loading)
-        if (this.apiBase) {
+        // Try to load from backend first (same as dropdown loading) - only if apiBase is properly set
+        if (this.apiBase && this.apiBase.length > 0) {
             try {
+                console.log('Attempting to load from backend:', this.apiBase);
                 const response = await fetch(`${this.apiBase}/api/users`);
                 if (response.ok) {
                     users = await response.json();
                     console.log('Loaded users from backend for transfer:', users.length);
+                } else {
+                    console.log('Backend response not ok:', response.status);
                 }
             } catch (error) {
-                console.log('Backend not available, using local storage for transfer');
+                console.log('Backend not available, using local storage for transfer:', error);
             }
+        } else {
+            console.log('No apiBase configured, using localStorage');
         }
         
         // Fallback to localStorage if backend fails (same as dropdown loading)
         if (users.length === 0) {
             users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
             console.log('Loaded users from localStorage for transfer:', users.length);
+        }
+        
+        // If STILL no users, this means localStorage is also empty - this is the real problem
+        if (users.length === 0) {
+            console.error('No users found in either backend or localStorage!');
+            console.log('localStorage bankingUsers:', localStorage.getItem('bankingUsers'));
+            return false;
         }
         
         console.log('All users for transfer:', users);
@@ -781,7 +798,9 @@ class AdminDashboard {
         console.log('User index found:', userIndex);
         
         if (userIndex === -1) {
-            console.error('User not found');
+            console.error('User not found in users array');
+            console.log('Looking for email:', targetEmail);
+            console.log('Available emails:', users.map(u => u.email));
             return false;
         }
         
