@@ -805,17 +805,34 @@ class AdminDashboard {
 
     async updateUserBalance(user, newBalance) {
         try {
+            console.log('=== ADMIN BALANCE UPDATE DEBUG ===');
+            console.log('User Object:', user);
+            console.log('User Email:', user.email);
+            console.log('User Account Number:', user.accountNumber);
+            console.log('User ID:', user.id);
+            console.log('New Balance:', newBalance);
+            
             // Update localStorage balance using the exact same key format as main app
             const balanceKey = this.getUserBalanceKey(user);
+            console.log('Generated Balance Key:', balanceKey);
+            console.log('Previous Balance in localStorage:', localStorage.getItem(balanceKey));
+            
             localStorage.setItem(balanceKey, newBalance.toString());
+            console.log('Balance Set in localStorage:', localStorage.getItem(balanceKey));
             
             // Update bankingUsers array
             const bankingUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            console.log('All Banking Users:', bankingUsers);
+            
             const userIndex = bankingUsers.findIndex(u => u.email === user.email);
+            console.log('Found user at index:', userIndex);
+            
             if (userIndex !== -1) {
                 bankingUsers[userIndex].balance = this.formatCurrency(newBalance);
                 localStorage.setItem('bankingUsers', JSON.stringify(bankingUsers));
+                console.log('Updated banking user balance to:', bankingUsers[userIndex].balance);
             }
+            console.log('====================================');
             
             // Try to update backend if available
             if (this.apiBase && this.apiBase.length > 0) {

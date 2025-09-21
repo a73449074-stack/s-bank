@@ -312,15 +312,23 @@ class BankingApp {
         
         // Initialize user-specific balance
         const userBalanceKey = this.getUserBalanceKey();
+        console.log('=== BALANCE INITIALIZATION DEBUG ===');
+        console.log('Current User Object:', this.currentUser);
+        console.log('Generated Balance Key:', userBalanceKey);
+        console.log('Existing Balance in localStorage:', localStorage.getItem(userBalanceKey));
+        
         if (!localStorage.getItem(userBalanceKey)) {
             // Set initial balance from user data
             const balanceFromUser = this.currentUser.balance || '$0.00';
             const numericBalance = parseFloat(balanceFromUser.replace(/[$,]/g, ''));
             localStorage.setItem(userBalanceKey, numericBalance.toString());
+            console.log('Setting initial balance from user data:', numericBalance);
         }
         
     // Load current balance for this user
     this.currentBalance = parseFloat(localStorage.getItem(userBalanceKey) || '0');
+    console.log('Final currentBalance set to:', this.currentBalance);
+    console.log('=====================================');
         
         // Setup form handlers
         this.setupDepositForms();
