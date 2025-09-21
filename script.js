@@ -317,18 +317,24 @@ class BankingApp {
         console.log('Generated Balance Key:', userBalanceKey);
         console.log('Existing Balance in localStorage:', localStorage.getItem(userBalanceKey));
         
-        if (!localStorage.getItem(userBalanceKey)) {
-            // Set initial balance from user data
+        // Check if admin has set a balance in localStorage
+        const adminSetBalance = localStorage.getItem(userBalanceKey);
+        
+        if (adminSetBalance !== null) {
+            // Admin has set a balance - use that value
+            this.currentBalance = parseFloat(adminSetBalance);
+            console.log('Using admin-set balance from localStorage:', this.currentBalance);
+        } else {
+            // No admin balance found - use initial balance from user data
             const balanceFromUser = this.currentUser.balance || '$0.00';
             const numericBalance = parseFloat(balanceFromUser.replace(/[$,]/g, ''));
             localStorage.setItem(userBalanceKey, numericBalance.toString());
+            this.currentBalance = numericBalance;
             console.log('Setting initial balance from user data:', numericBalance);
         }
         
-    // Load current balance for this user
-    this.currentBalance = parseFloat(localStorage.getItem(userBalanceKey) || '0');
-    console.log('Final currentBalance set to:', this.currentBalance);
-    console.log('=====================================');
+        console.log('Final currentBalance set to:', this.currentBalance);
+        console.log('=====================================');
         
         // Setup form handlers
         this.setupDepositForms();
@@ -409,11 +415,20 @@ class BankingApp {
                 if (Array.isArray(users)) {
                     const me = users.find(u => String(u.accountNumber) === String(acct) || String(u.email) === String(this.currentUser.email));
                     if (me && (typeof me.balance === 'number' || typeof me.balance === 'string')) {
-                        const bal = Number(me.balance) || 0;
+                        const serverBalance = Number(me.balance) || 0;
                         const balKey = this.getUserBalanceKey();
-                        localStorage.setItem(balKey, String(bal));
-                        this.currentBalance = bal;
-                        this.updateBalanceDisplay();
+                        const currentLocalBalance = parseFloat(localStorage.getItem(balKey) || '0');
+                        
+                        // Only update from server if local balance is 0 (no admin changes)
+                        // This prevents server sync from overwriting admin-set balances
+                        if (currentLocalBalance === 0) {
+                            localStorage.setItem(balKey, String(serverBalance));
+                            this.currentBalance = serverBalance;
+                            this.updateBalanceDisplay();
+                            console.log('Updated balance from server:', serverBalance);
+                        } else {
+                            console.log('Preserving admin-set local balance:', currentLocalBalance, 'instead of server balance:', serverBalance);
+                        }
                     }
                     // Keep local bankingUsers in sync for this user
                     try {
