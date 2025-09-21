@@ -807,31 +807,21 @@ class AdminDashboard {
         const user = users[userIndex];
         console.log('Target user:', user);
         
-        // Get the balance key - try multiple possible formats
-        let userBalanceKey = `userBalance_${user.accountNumber}`;
-        let currentBalance = parseFloat(localStorage.getItem(userBalanceKey) || '0');
+        // Use the EXACT same balance key logic as the main banking app
+        // Main app uses: `userBalance_${this.currentUser.accountNumber || this.currentUser.id}`
+        const balanceKey = `userBalance_${user.accountNumber || user.id}`;
+        console.log('Using balance key (same as main app):', balanceKey);
         
-        // If no balance found with accountNumber, try with id
-        if (currentBalance === 0 && user.id) {
-            userBalanceKey = `userBalance_${user.id}`;
-            currentBalance = parseFloat(localStorage.getItem(userBalanceKey) || '0');
-        }
-        
-        // If still no balance found, try email-based key
-        if (currentBalance === 0) {
-            userBalanceKey = `userBalance_${user.email}`;
-            currentBalance = parseFloat(localStorage.getItem(userBalanceKey) || '0');
-        }
-        
-        console.log('Balance key used:', userBalanceKey);
+        const currentBalance = parseFloat(localStorage.getItem(balanceKey) || '0');
         console.log('Current balance:', currentBalance);
         
         // Calculate new balance
         const newBalance = currentBalance + amount;
         console.log('New balance will be:', newBalance);
         
-        // Update the balance in localStorage
-        localStorage.setItem(userBalanceKey, newBalance.toString());
+        // Update the balance in localStorage using the exact key format as main app
+        localStorage.setItem(balanceKey, newBalance.toString());
+        console.log('Updated balance in localStorage with key:', balanceKey);
         
         // Also update the user's balance in localStorage bankingUsers if it exists there
         const localUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
