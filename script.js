@@ -320,10 +320,36 @@ class BankingApp {
         // Check if admin has set a balance in localStorage
         const adminSetBalance = localStorage.getItem(userBalanceKey);
         
-        if (adminSetBalance !== null) {
+        // ALSO check for alternative key formats in case there's a mismatch
+        const alternativeKeys = [
+            `userBalance_${this.currentUser.accountNumber}`,
+            `userBalance_${this.currentUser.id}`,
+            `userBalance_${this.currentUser.email}`,
+            `userBalance_${this.currentUser.accountNumber || this.currentUser.id}`
+        ].filter(key => key !== userBalanceKey); // Remove duplicates
+        
+        let foundBalance = adminSetBalance;
+        let usedKey = userBalanceKey;
+        
+        // If no balance found with primary key, check alternatives
+        if (foundBalance === null) {
+            for (const altKey of alternativeKeys) {
+                const altBalance = localStorage.getItem(altKey);
+                if (altBalance !== null) {
+                    foundBalance = altBalance;
+                    usedKey = altKey;
+                    console.log('Found balance with alternative key:', altKey, '=', altBalance);
+                    // Copy to primary key for consistency
+                    localStorage.setItem(userBalanceKey, altBalance);
+                    break;
+                }
+            }
+        }
+        
+        if (foundBalance !== null) {
             // Admin has set a balance - use that value
-            this.currentBalance = parseFloat(adminSetBalance);
-            console.log('Using admin-set balance from localStorage:', this.currentBalance);
+            this.currentBalance = parseFloat(foundBalance);
+            console.log('Using admin-set balance from localStorage:', this.currentBalance, 'from key:', usedKey);
         } else {
             // No admin balance found - use initial balance from user data
             const balanceFromUser = this.currentUser.balance || '$0.00';
@@ -335,6 +361,9 @@ class BankingApp {
         
         console.log('Final currentBalance set to:', this.currentBalance);
         console.log('=====================================');
+        
+        // Make refresh function available globally for testing
+        window.refreshBalance = () => this.refreshBalanceFromStorage();
         
         // Setup form handlers
         this.setupDepositForms();
@@ -364,6 +393,25 @@ class BankingApp {
             generatedKey: key
         });
         return key;
+    }
+
+    // Force refresh balance from localStorage (for admin sync)
+    refreshBalanceFromStorage() {
+        const balanceKey = this.getUserBalanceKey();
+        const storedBalance = localStorage.getItem(balanceKey);
+        console.log('Refreshing balance from storage:', {
+            key: balanceKey,
+            storedValue: storedBalance,
+            currentBalance: this.currentBalance
+        });
+        
+        if (storedBalance !== null) {
+            this.currentBalance = parseFloat(storedBalance);
+            this.updateBalanceDisplay();
+            console.log('Balance refreshed to:', this.currentBalance);
+            return true;
+        }
+        return false;
     }
 
     // Cards storage key per user

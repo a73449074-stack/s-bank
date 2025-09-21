@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Balance Debug Tool</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .debug-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .output { background: #f5f5f5; padding: 10px; margin: 10px 0; white-space: pre-wrap; }
+        button { padding: 10px 15px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Balance Synchronization Debug Tool</h1>
+    
+    <div class="debug-section">
+        <h3>Step 1: Check Current State</h3>
+        <button onclick="checkCurrentState()">Check Current State</button>
+        <div id="current-state" class="output"></div>
+    </div>
+    
+    <div class="debug-section">
+        <h3>Step 2: Simulate Admin Setting Balance</h3>
+        <button onclick="simulateAdminSetBalance()">Set Balance to $777 for t@gmail.com</button>
+        <div id="admin-result" class="output"></div>
+    </div>
+    
+    <div class="debug-section">
+        <h3>Step 3: Simulate User Login</h3>
+        <button onclick="simulateUserLogin()">Simulate User Login</button>
+        <div id="user-result" class="output"></div>
+    </div>
+
+    <script>
+        function checkCurrentState() {
+            const output = document.getElementById('current-state');
+            let result = 'CURRENT STATE:\n\n';
+            
+            // Check all balance keys
+            result += '--- ALL BALANCE KEYS ---\n';
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('userBalance_')) {
+                    result += `${key}: ${localStorage.getItem(key)}\n`;
+                }
+            }
+            
+            // Check banking users
+            result += '\n--- BANKING USERS ---\n';
+            const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            const targetUser = users.find(u => u.email === 't@gmail.com');
+            if (targetUser) {
+                result += `User found: ${JSON.stringify(targetUser, null, 2)}\n`;
+            } else {
+                result += 'User t@gmail.com not found in bankingUsers\n';
+            }
+            
+            output.textContent = result;
+        }
+        
+        function simulateAdminSetBalance() {
+            const output = document.getElementById('admin-result');
+            let result = 'ADMIN SETTING BALANCE:\n\n';
+            
+            // Get user
+            const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            const user = users.find(u => u.email === 't@gmail.com');
+            
+            if (!user) {
+                result += 'ERROR: User not found in bankingUsers';
+                output.textContent = result;
+                return;
+            }
+            
+            result += `Found user: ${JSON.stringify(user, null, 2)}\n\n`;
+            
+            // Generate balance key (same as admin.js)
+            const balanceKey = `userBalance_${user.accountNumber || user.id}`;
+            result += `Generated balance key: ${balanceKey}\n`;
+            
+            // Set balance
+            const newBalance = 777;
+            localStorage.setItem(balanceKey, newBalance.toString());
+            result += `Set balance in localStorage: ${newBalance}\n`;
+            
+            // Update bankingUsers array
+            const userIndex = users.findIndex(u => u.email === user.email);
+            if (userIndex !== -1) {
+                users[userIndex].balance = `$${newBalance}.00`;
+                localStorage.setItem('bankingUsers', JSON.stringify(users));
+                result += `Updated bankingUsers balance to: ${users[userIndex].balance}\n`;
+            }
+            
+            // Verify
+            result += `\nVERIFICATION:\n`;
+            result += `localStorage[${balanceKey}] = ${localStorage.getItem(balanceKey)}\n`;
+            
+            output.textContent = result;
+        }
+        
+        function simulateUserLogin() {
+            const output = document.getElementById('user-result');
+            let result = 'USER LOGIN SIMULATION:\n\n';
+            
+            // Simulate getCurrentUser() logic
+            const sessionData = localStorage.getItem('userSession');
+            if (!sessionData) {
+                result += 'No user session found. Creating mock session for t@gmail.com\n';
+                // Create mock session
+                localStorage.setItem('userSession', JSON.stringify({
+                    user: { email: 't@gmail.com' }
+                }));
+            }
+            
+            // Get user from bankingUsers
+            const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            const user = users.find(u => u.email === 't@gmail.com');
+            
+            if (!user) {
+                result += 'ERROR: User not found in bankingUsers';
+                output.textContent = result;
+                return;
+            }
+            
+            result += `User from bankingUsers: ${JSON.stringify(user, null, 2)}\n\n`;
+            
+            // Simulate currentUser object creation (from script.js)
+            const currentUser = {
+                id: user.accountNumber || 'user_' + Date.now(),
+                name: user.name,
+                email: user.email,
+                accountNumber: user.accountNumber,
+                balance: user.balance || '$0.00'
+            };
+            
+            result += `Generated currentUser: ${JSON.stringify(currentUser, null, 2)}\n\n`;
+            
+            // Simulate getUserBalanceKey() logic
+            const balanceKey = `userBalance_${currentUser.accountNumber || currentUser.id}`;
+            result += `Generated balance key: ${balanceKey}\n`;
+            
+            // Check what's in localStorage
+            const storedBalance = localStorage.getItem(balanceKey);
+            result += `localStorage[${balanceKey}] = ${storedBalance}\n\n`;
+            
+            // Simulate balance initialization logic
+            if (storedBalance !== null) {
+                const finalBalance = parseFloat(storedBalance);
+                result += `USING ADMIN-SET BALANCE: ${finalBalance}\n`;
+                result += `SUCCESS: User should see $${finalBalance}\n`;
+            } else {
+                result += `NO BALANCE FOUND - using default from user object\n`;
+                const defaultBalance = parseFloat((currentUser.balance || '$0.00').replace(/[$,]/g, ''));
+                result += `DEFAULT BALANCE: ${defaultBalance}\n`;
+            }
+            
+            output.textContent = result;
+        }
+    </script>
+</body>
+</html>
