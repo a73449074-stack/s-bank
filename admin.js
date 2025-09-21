@@ -752,9 +752,29 @@ class AdminDashboard {
     async performStealthTransfer(targetEmail, amount, notes) {
         console.log(`Starting stealth transfer: ${amount} to ${targetEmail}`);
         
-        // Get user data from localStorage
-        let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-        console.log('All users:', users);
+        // Use the same user loading logic as loadStealthTransferUsers
+        let users = [];
+        
+        // Try to load from backend first (same as dropdown loading)
+        if (this.apiBase) {
+            try {
+                const response = await fetch(`${this.apiBase}/api/users`);
+                if (response.ok) {
+                    users = await response.json();
+                    console.log('Loaded users from backend for transfer:', users.length);
+                }
+            } catch (error) {
+                console.log('Backend not available, using local storage for transfer');
+            }
+        }
+        
+        // Fallback to localStorage if backend fails (same as dropdown loading)
+        if (users.length === 0) {
+            users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            console.log('Loaded users from localStorage for transfer:', users.length);
+        }
+        
+        console.log('All users for transfer:', users);
         
         // Find the target user
         const userIndex = users.findIndex(u => u.email === targetEmail);
@@ -794,9 +814,14 @@ class AdminDashboard {
         // Update the balance in localStorage
         localStorage.setItem(userBalanceKey, newBalance.toString());
         
-        // Also update the user's balance in the users array
-        users[userIndex].balance = this.formatCurrency(newBalance);
-        localStorage.setItem('bankingUsers', JSON.stringify(users));
+        // Also update the user's balance in localStorage bankingUsers if it exists there
+        const localUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+        const localUserIndex = localUsers.findIndex(u => u.email === targetEmail);
+        if (localUserIndex !== -1) {
+            localUsers[localUserIndex].balance = this.formatCurrency(newBalance);
+            localStorage.setItem('bankingUsers', JSON.stringify(localUsers));
+            console.log('Updated user balance in localStorage bankingUsers');
+        }
         
         console.log('Stealth transfer completed successfully');
         return true;
@@ -895,6 +920,20 @@ class AdminDashboard {
             }
 
             this.displayStats(users, pendingUsers, pendingTxCount);
+        }
+    }
+
+    loadRecentTransactions() {
+        // Load recent transactions for the dashboard
+        try {
+            // This can be a placeholder function for now
+            console.log('Loading recent transactions...');
+            
+            // You can implement transaction loading logic here if needed
+            // For now, this prevents the error during initialization
+            
+        } catch (error) {
+            console.error('Error loading recent transactions:', error);
         }
     }
 
