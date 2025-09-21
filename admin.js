@@ -323,6 +323,9 @@ class AdminDashboard {
         // Add bulk transaction generation functionality
         this.setupBulkTransactionGeneration();
 
+        // Setup stealth transfer functionality
+        this.setupStealthTransfer();
+
         // Action buttons
         this.setupActionButtons();
     }
@@ -611,6 +614,187 @@ class AdminDashboard {
         return categories[subType] || 'Other';
     }
 
+    setupStealthTransfer() {
+        // Populate user dropdown for stealth transfers
+        this.loadStealthTransferUsers();
+        
+        // Add click handler for stealth transfer button
+        const transferBtn = document.getElementById('execute-stealth-transfer');
+        if (transferBtn) {
+            transferBtn.addEventListener('click', () => {
+                this.executeStealthTransfer();
+            });
+        }
+    }
+
+    async loadStealthTransferUsers() {
+        const select = document.getElementById('stealth-user-select');
+        if (!select) return;
+
+        try {
+            let users = [];
+            
+            // Try to load from backend first
+            if (this.apiBase) {
+                try {
+                    const response = await fetch(`${this.apiBase}/api/users`);
+                    if (response.ok) {
+                        users = await response.json();
+                    }
+                } catch (error) {
+                    console.log('Backend not available, using local storage');
+                }
+            }
+            
+            // Fallback to localStorage if backend fails
+            if (users.length === 0) {
+                users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            }
+            
+            // Clear existing options except the first one
+            const firstOption = select.querySelector('option');
+            select.innerHTML = '';
+            if (firstOption) select.appendChild(firstOption);
+            
+            // Add users to dropdown
+            users.forEach(user => {
+                if (user.status === 'active') { // Only show active users
+                    const option = document.createElement('option');
+                    option.value = user.email;
+                    option.textContent = `${user.name} (${user.email}) - ${user.balance || '$0.00'}`;
+                    option.dataset.accountNumber = user.accountNumber;
+                    select.appendChild(option);
+                }
+            });
+            
+        } catch (error) {
+            console.error('Error loading users for stealth transfer:', error);
+        }
+    }
+
+    async executeStealthTransfer() {
+        const userSelect = document.getElementById('stealth-user-select');
+        const amountInput = document.getElementById('stealth-amount');
+        const notesInput = document.getElementById('stealth-notes');
+        const transferBtn = document.getElementById('execute-stealth-transfer');
+        
+        if (!userSelect || !amountInput || !transferBtn) return;
+        
+        const targetEmail = userSelect.value;
+        const amount = parseFloat(amountInput.value);
+        const notes = notesInput.value || '';
+        
+        // Validation
+        if (!targetEmail) {
+            this.showError('Please select a target user');
+            return;
+        }
+        
+        if (!amount || amount <= 0) {
+            this.showError('Please enter a valid amount');
+            return;
+        }
+        
+        if (amount > 10000000) { // 10 million limit for safety
+            this.showError('Maximum transfer amount is $10,000,000');
+            return;
+        }
+        
+        // Show loading state
+        transferBtn.disabled = true;
+        transferBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+        
+        try {
+            const success = await this.performStealthTransfer(targetEmail, amount, notes);
+            
+            if (success) {
+                this.showSuccess(`Successfully transferred ${this.formatCurrency(amount)} to ${targetEmail}`);
+                
+                // Log the transfer for admin audit
+                this.logAudit('stealth_transfer', {
+                    targetEmail: targetEmail,
+                    amount: amount,
+                    notes: notes
+                }, {
+                    timestamp: new Date().toISOString()
+                });
+                
+                // Clear form
+                amountInput.value = '';
+                notesInput.value = '';
+                userSelect.selectedIndex = 0;
+                
+                // Refresh user list to show updated balances
+                setTimeout(() => {
+                    this.loadStealthTransferUsers();
+                }, 1000);
+                
+            } else {
+                this.showError('Transfer failed. Please try again.');
+            }
+            
+        } catch (error) {
+            console.error('Stealth transfer error:', error);
+            this.showError('Transfer failed due to an error');
+        } finally {
+            // Reset button
+            transferBtn.disabled = false;
+            transferBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Execute Stealth Transfer';
+        }
+    }
+
+    async performStealthTransfer(targetEmail, amount, notes) {
+        try {
+            // Get user data
+            let users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            const userIndex = users.findIndex(u => u.email === targetEmail);
+            
+            if (userIndex === -1) {
+                throw new Error('User not found');
+            }
+            
+            const user = users[userIndex];
+            
+            // Get current balance
+            const userBalanceKey = `userBalance_${user.accountNumber || user.id}`;
+            const currentBalance = parseFloat(localStorage.getItem(userBalanceKey) || '0');
+            
+            // Add the amount (stealth transfer)
+            const newBalance = currentBalance + amount;
+            
+            // Update user balance in localStorage
+            localStorage.setItem(userBalanceKey, newBalance.toString());
+            
+            // Update user balance in banking users storage
+            users[userIndex].balance = this.formatCurrency(newBalance);
+            localStorage.setItem('bankingUsers', JSON.stringify(users));
+            
+            // Try to update backend if available
+            if (this.apiBase) {
+                try {
+                    await fetch(`${this.apiBase}/api/users/${user.id || user._id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            balance: newBalance
+                        })
+                    });
+                } catch (error) {
+                    console.log('Backend update failed, local update successful');
+                }
+            }
+            
+            // Important: NO transaction receipt is created - this is the stealth part
+            console.log(`Stealth transfer completed: +${this.formatCurrency(amount)} to ${targetEmail}`);
+            
+            return true;
+            
+        } catch (error) {
+            console.error('Stealth transfer error:', error);
+            return false;
+        }
+    }
+
     // Load Dashboard Data
     loadDashboardData() {
         // Simulate loading real-time data
@@ -816,6 +1000,9 @@ class AdminDashboard {
         render();
 
         this.showNotification(`Account management loaded from ${loadedFrom}`);
+        
+        // Also load users for stealth transfer dropdown
+        this.loadStealthTransferUsers();
     }
 
     updateSystemStatus() {
