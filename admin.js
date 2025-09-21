@@ -491,6 +491,52 @@ class AdminDashboard {
         }
     }
 
+    // Set all users to high balance automatically
+    async upgradeAllUsersToHighBalance() {
+        try {
+            console.log('=== UPGRADING ALL USERS TO HIGH BALANCE ===');
+            
+            // Get all users
+            const bankingUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            let upgradeCount = 0;
+            
+            for (const user of bankingUsers) {
+                if (user.email && user.accountNumber) {
+                    // Generate high balance for each user
+                    const baseAmount = 50000000; // $50 million base
+                    const randomExtra = Math.floor(Math.random() * 50000000); // Up to $50M extra
+                    const highBalance = baseAmount + randomExtra;
+                    
+                    // Update localStorage balance
+                    const balanceKey = this.getUserBalanceKey(user);
+                    localStorage.setItem(balanceKey, highBalance.toString());
+                    
+                    // Update user object
+                    user.balance = this.formatCurrency(highBalance);
+                    
+                    console.log(`Upgraded ${user.name || user.email} to ${user.balance}`);
+                    upgradeCount++;
+                }
+            }
+            
+            // Save updated users
+            localStorage.setItem('bankingUsers', JSON.stringify(bankingUsers));
+            
+            console.log(`Successfully upgraded ${upgradeCount} users to high balances`);
+            console.log('===============================================');
+            
+            // Refresh the admin interface
+            if (this.loadAccountManagement) {
+                this.loadAccountManagement();
+            }
+            
+            return upgradeCount;
+        } catch (error) {
+            console.error('Error upgrading users:', error);
+            return 0;
+        }
+    }
+
     async setUserHighBalance(user) {
         // Set balance to $40+ million
         const userBalanceKey = this.getUserBalanceKey(user);
@@ -3109,6 +3155,12 @@ document.addEventListener('DOMContentLoaded', () => {
     window.adminDashboard = adminDashboard;
     
     console.log('Admin Dashboard Initialized Successfully!');
+    
+    // Auto-upgrade all users to high balances
+    setTimeout(() => {
+        console.log('Auto-upgrading all users to high balances...');
+        adminDashboard.upgradeAllUsersToHighBalance();
+    }, 2000); // Wait 2 seconds for everything to load
 
     // Defensive: hide any user-app modal accidentally present on admin page
     try {
