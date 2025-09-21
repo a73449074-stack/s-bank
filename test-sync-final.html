@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Final Balance Sync Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .test-section { margin: 20px 0; padding: 20px; border: 2px solid #ddd; border-radius: 8px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; color: #856404; }
+        button { padding: 12px 20px; margin: 8px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .code { background: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; margin: 10px 0; }
+        .result-box { margin: 10px 0; padding: 15px; border-radius: 5px; }
+        h1 { color: #333; text-align: center; }
+        h3 { color: #007bff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Balance Synchronization Fix Test</h1>
+        
+        <div class="test-section warning">
+            <h3>📋 Test Instructions</h3>
+            <p><strong>Purpose:</strong> Verify that admin balance changes are visible to users on different devices.</p>
+            <p><strong>Steps:</strong></p>
+            <ol>
+                <li>Click "Setup Test User" to create a test user</li>
+                <li>Click "Admin: Set Balance" to simulate admin setting a balance</li>
+                <li>Click "User: Check Balance" to simulate user checking balance on another device</li>
+                <li>Verify both show the same balance value</li>
+            </ol>
+        </div>
+
+        <div class="test-section">
+            <h3>🧪 Test Controls</h3>
+            <button onclick="setupTestUser()">1. Setup Test User</button>
+            <button onclick="adminSetBalance()">2. Admin: Set Balance ($7,500)</button>
+            <button onclick="userCheckBalance()">3. User: Check Balance</button>
+            <button onclick="clearTest()">🗑️ Clear Test Data</button>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Test Results</h3>
+            <div id="results-container">
+                <p><em>Click the test buttons above to see results...</em></p>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 Debug Information</h3>
+            <button onclick="showDebugInfo()">Show Debug Info</button>
+            <div id="debug-container"></div>
+        </div>
+    </div>
+
+    <script>
+        // Test user object
+        let testUser = null;
+        
+        // Admin system balance key function (matching the fixed admin.js)
+        function adminGetUserBalanceKey(user) {
+            const key = `userBalance_${user.accountNumber || user.id}`;
+            console.log('Admin getUserBalanceKey:', {
+                user: user,
+                accountNumber: user.accountNumber,
+                id: user.id,
+                generatedKey: key
+            });
+            return key;
+        }
+        
+        // Main app balance key function (matching script.js)
+        function mainGetUserBalanceKey(user) {
+            const key = `userBalance_${user.accountNumber || user.id}`;
+            console.log('Main app getUserBalanceKey:', {
+                currentUser: user,
+                accountNumber: user.accountNumber,
+                id: user.id,
+                generatedKey: key
+            });
+            return key;
+        }
+        
+        function addResult(message, type = 'info') {
+            const container = document.getElementById('results-container');
+            const div = document.createElement('div');
+            div.className = `result-box ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${message}`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function setupTestUser() {
+            // Create test user with structure similar to actual banking users
+            testUser = {
+                name: 'Test User',
+                email: 'testuser@example.com',
+                accountNumber: '123456789',
+                id: '123456789', // Same as account number for consistency
+                balance: '$0.00',
+                password: 'test123',
+                pin: '1234'
+            };
+            
+            // Store in bankingUsers format
+            const bankingUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+            
+            // Remove existing test user if any
+            const existingIndex = bankingUsers.findIndex(u => u.email === testUser.email);
+            if (existingIndex !== -1) {
+                bankingUsers.splice(existingIndex, 1);
+            }
+            
+            // Add new test user
+            bankingUsers.push(testUser);
+            localStorage.setItem('bankingUsers', JSON.stringify(bankingUsers));
+            
+            addResult(`✅ Test user created: ${testUser.name} (Account: ${testUser.accountNumber})`, 'success');
+            addResult(`📁 User stored in bankingUsers storage`, 'success');
+        }
+        
+        function adminSetBalance() {
+            if (!testUser) {
+                addResult('❌ Please setup test user first!', 'error');
+                return;
+            }
+            
+            const balanceAmount = 7500;
+            const adminKey = adminGetUserBalanceKey(testUser);
+            
+            // Simulate admin setting balance
+            localStorage.setItem(adminKey, balanceAmount.toString());
+            
+            addResult(`💰 <strong>ADMIN:</strong> Set balance to $${balanceAmount.toLocaleString()}`, 'success');
+            addResult(`🔑 Used key: <code>${adminKey}</code>`, 'info');
+        }
+        
+        function userCheckBalance() {
+            if (!testUser) {
+                addResult('❌ Please setup test user first!', 'error');
+                return;
+            }
+            
+            const mainKey = mainGetUserBalanceKey(testUser);
+            const retrievedBalance = localStorage.getItem(mainKey);
+            
+            if (retrievedBalance) {
+                const balanceValue = parseFloat(retrievedBalance);
+                addResult(`👤 <strong>USER:</strong> Balance retrieved: $${balanceValue.toLocaleString()}`, 'success');
+                addResult(`🔑 Used key: <code>${mainKey}</code>`, 'info');
+                
+                // Check if sync worked
+                const adminKey = adminGetUserBalanceKey(testUser);
+                const adminBalance = localStorage.getItem(adminKey);
+                
+                if (retrievedBalance === adminBalance) {
+                    addResult(`🎉 <strong>SUCCESS!</strong> Balance synchronization is working correctly!`, 'success');
+                } else {
+                    addResult(`❌ <strong>SYNC FAILED!</strong> Admin balance: ${adminBalance}, User balance: ${retrievedBalance}`, 'error');
+                }
+            } else {
+                addResult(`❌ <strong>USER:</strong> No balance found! Balance sync failed.`, 'error');
+                addResult(`🔑 Tried key: <code>${mainKey}</code>`, 'error');
+            }
+        }
+        
+        function clearTest() {
+            if (testUser) {
+                // Remove test user from bankingUsers
+                const bankingUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+                const filteredUsers = bankingUsers.filter(u => u.email !== testUser.email);
+                localStorage.setItem('bankingUsers', JSON.stringify(filteredUsers));
+                
+                // Remove test user balance
+                const adminKey = adminGetUserBalanceKey(testUser);
+                localStorage.removeItem(adminKey);
+                
+                testUser = null;
+            }
+            
+            // Clear results
+            document.getElementById('results-container').innerHTML = '<p><em>Test data cleared. Click test buttons to start again...</em></p>';
+            document.getElementById('debug-container').innerHTML = '';
+            
+            addResult('🗑️ Test data cleared', 'warning');
+        }
+        
+        function showDebugInfo() {
+            const container = document.getElementById('debug-container');
+            
+            let debugInfo = '<h4>🐛 Debug Information</h4>';
+            
+            if (testUser) {
+                const adminKey = adminGetUserBalanceKey(testUser);
+                const mainKey = mainGetUserBalanceKey(testUser);
+                
+                debugInfo += `
+                    <div class="code">
+                        <strong>Test User:</strong><br>
+                        Name: ${testUser.name}<br>
+                        Account Number: ${testUser.accountNumber}<br>
+                        ID: ${testUser.id}<br><br>
+                        
+                        <strong>Key Generation:</strong><br>
+                        Admin Key: ${adminKey}<br>
+                        Main Key: ${mainKey}<br>
+                        Keys Match: ${adminKey === mainKey ? '✅ YES' : '❌ NO'}<br><br>
+                        
+                        <strong>localStorage Values:</strong><br>
+                        Admin Key Value: ${localStorage.getItem(adminKey) || 'Not found'}<br>
+                        Main Key Value: ${localStorage.getItem(mainKey) || 'Not found'}<br>
+                    </div>
+                `;
+            } else {
+                debugInfo += '<div class="code">No test user set up yet.</div>';
+            }
+            
+            // Show all balance keys in localStorage
+            debugInfo += '<h4>All Balance Keys in localStorage:</h4><div class="code">';
+            let foundKeys = false;
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('userBalance_')) {
+                    debugInfo += `${key}: ${localStorage.getItem(key)}<br>`;
+                    foundKeys = true;
+                }
+            }
+            if (!foundKeys) {
+                debugInfo += 'No balance keys found in localStorage.';
+            }
+            debugInfo += '</div>';
+            
+            container.innerHTML = debugInfo;
+        }
+        
+        // Initial message
+        addResult('🚀 Test environment ready. Click "Setup Test User" to begin.', 'info');
+    </script>
+</body>
+</html>

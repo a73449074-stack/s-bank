@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Balance Synchronization Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .result { margin: 10px 0; padding: 10px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Balance Synchronization Test</h1>
+    
+    <div class="test-section">
+        <h3>Test User Data</h3>
+        <div id="test-users">
+            <!-- Test users will be displayed here -->
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Balance Key Generation Test</h3>
+        <button onclick="testBalanceKeys()">Test Balance Key Generation</button>
+        <div id="key-test-results"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Balance Sync Test</h3>
+        <button onclick="testBalanceSync()">Set Test Balance (Admin)</button>
+        <button onclick="checkUserBalance()">Check User Balance</button>
+        <div id="sync-test-results"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Current localStorage Balance Keys</h3>
+        <button onclick="showCurrentBalanceKeys()">Show All Balance Keys</button>
+        <div id="current-keys"></div>
+    </div>
+
+    <script>
+        // Import the admin balance functions (simplified)
+        class BalanceTest {
+            getUserBalanceKey(user) {
+                const key = `userBalance_${user.accountNumber || user.id}`;
+                console.log('Test getUserBalanceKey:', {
+                    user: user,
+                    accountNumber: user.accountNumber,
+                    id: user.id,
+                    generatedKey: key
+                });
+                return key;
+            }
+            
+            // Simulate main app balance key generation
+            getMainAppBalanceKey(user) {
+                const key = `userBalance_${user.accountNumber || user.id}`;
+                console.log('Main app getUserBalanceKey:', {
+                    currentUser: user,
+                    accountNumber: user.accountNumber,
+                    id: user.id,
+                    generatedKey: key
+                });
+                return key;
+            }
+        }
+        
+        const balanceTest = new BalanceTest();
+        
+        // Create test users
+        const testUsers = [
+            { id: 'user1', accountNumber: '123456', name: 'Test User 1', email: 'test1@example.com' },
+            { id: 'user2', accountNumber: '789012', name: 'Test User 2', email: 'test2@example.com' },
+            { id: 'user3', accountNumber: null, name: 'Test User 3', email: 'test3@example.com' }
+        ];
+        
+        function displayTestUsers() {
+            const container = document.getElementById('test-users');
+            container.innerHTML = testUsers.map(user => 
+                `<div>ID: ${user.id}, Account: ${user.accountNumber}, Name: ${user.name}</div>`
+            ).join('');
+        }
+        
+        function testBalanceKeys() {
+            const resultsDiv = document.getElementById('key-test-results');
+            let results = '<h4>Balance Key Generation Results:</h4>';
+            
+            testUsers.forEach(user => {
+                const adminKey = balanceTest.getUserBalanceKey(user);
+                const mainKey = balanceTest.getMainAppBalanceKey(user);
+                
+                const match = adminKey === mainKey;
+                
+                results += `
+                    <div class="result ${match ? 'success' : 'error'}">
+                        <strong>User: ${user.name}</strong><br>
+                        Admin Key: ${adminKey}<br>
+                        Main Key: ${mainKey}<br>
+                        Match: ${match ? '✅ YES' : '❌ NO'}
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = results;
+        }
+        
+        function testBalanceSync() {
+            const testUser = testUsers[0]; // Use first test user
+            const balanceKey = balanceTest.getUserBalanceKey(testUser);
+            const testAmount = 5000;
+            
+            // Set balance as admin would
+            localStorage.setItem(balanceKey, testAmount.toString());
+            
+            const resultsDiv = document.getElementById('sync-test-results');
+            resultsDiv.innerHTML = `
+                <div class="result success">
+                    <strong>Admin Balance Set</strong><br>
+                    User: ${testUser.name}<br>
+                    Balance Key: ${balanceKey}<br>
+                    Amount: $${testAmount}<br>
+                    Stored Value: ${localStorage.getItem(balanceKey)}
+                </div>
+            `;
+        }
+        
+        function checkUserBalance() {
+            const testUser = testUsers[0]; // Use same test user
+            const mainAppKey = balanceTest.getMainAppBalanceKey(testUser);
+            const storedBalance = localStorage.getItem(mainAppKey);
+            
+            const resultsDiv = document.getElementById('sync-test-results');
+            const currentContent = resultsDiv.innerHTML;
+            
+            resultsDiv.innerHTML = currentContent + `
+                <div class="result ${storedBalance ? 'success' : 'error'}">
+                    <strong>User Balance Check</strong><br>
+                    User: ${testUser.name}<br>
+                    Main App Key: ${mainAppKey}<br>
+                    Retrieved Balance: ${storedBalance || 'NOT FOUND'}<br>
+                    Status: ${storedBalance ? '✅ SYNCED' : '❌ NOT SYNCED'}
+                </div>
+            `;
+        }
+        
+        function showCurrentBalanceKeys() {
+            const resultsDiv = document.getElementById('current-keys');
+            let keysList = '<h4>Current Balance Keys in localStorage:</h4>';
+            
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('userBalance_')) {
+                    const value = localStorage.getItem(key);
+                    keysList += `<div class="result">Key: ${key}, Value: ${value}</div>`;
+                }
+            }
+            
+            resultsDiv.innerHTML = keysList;
+        }
+        
+        // Initialize display
+        displayTestUsers();
+    </script>
+</body>
+</html>

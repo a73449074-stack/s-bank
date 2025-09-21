@@ -342,7 +342,14 @@ class BankingApp {
 
     // Get user-specific balance storage key
     getUserBalanceKey() {
-        return `userBalance_${this.currentUser.accountNumber || this.currentUser.id}`;
+        const key = `userBalance_${this.currentUser.accountNumber || this.currentUser.id}`;
+        console.log('Main app getUserBalanceKey:', {
+            currentUser: this.currentUser,
+            accountNumber: this.currentUser.accountNumber,
+            id: this.currentUser.id,
+            generatedKey: key
+        });
+        return key;
     }
 
     // Cards storage key per user

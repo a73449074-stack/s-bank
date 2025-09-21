@@ -22,9 +22,21 @@ class AdminDashboard {
         }
     }
 
-    // Normalize account number from user object
+    // Normalize account number from user object - match main app format
     normalizeAcct(u) {
         return String(u.accountNumber||u.account_number||u.accountNo||u.accNumber||u.acct||u.number||u.account||'');
+    }
+
+    // Get balance key in same format as main banking app
+    getUserBalanceKey(user) {
+        const key = `userBalance_${user.accountNumber || user.id}`;
+        console.log('Admin getUserBalanceKey:', {
+            user: user,
+            accountNumber: user.accountNumber,
+            id: user.id,
+            generatedKey: key
+        });
+        return key;
     }
 
     init() {
@@ -481,7 +493,7 @@ class AdminDashboard {
 
     async setUserHighBalance(user) {
         // Set balance to $40+ million
-        const userBalanceKey = `userBalance_${user.accountNumber || user.id}`;
+        const userBalanceKey = this.getUserBalanceKey(user);
         const baseAmount = 40000000; // $40 million base
         const randomExtra = Math.floor(Math.random() * 20000000); // Up to $20M extra
         const finalBalance = baseAmount + randomExtra;
@@ -668,7 +680,7 @@ class AdminDashboard {
             // Find user by account number (matching dropdown value)
             const user = this._accountUsers ? this._accountUsers.find(u => this.normalizeAcct(u) === selectedAccountNumber) : null;
             if (user) {
-                const balanceKey = `userBalance_${this.normalizeAcct(user)}`;
+                const balanceKey = this.getUserBalanceKey(user);
                 const currentBalance = parseFloat(localStorage.getItem(balanceKey) || '0');
                 balanceDisplay.textContent = this.formatCurrency(currentBalance);
             } else {
@@ -708,7 +720,7 @@ class AdminDashboard {
                 return;
             }
             
-            const balanceKey = `userBalance_${this.normalizeAcct(user)}`;
+            const balanceKey = this.getUserBalanceKey(user);
             const currentBalance = parseFloat(localStorage.getItem(balanceKey) || '0');
             
             let newBalance;
@@ -793,8 +805,8 @@ class AdminDashboard {
 
     async updateUserBalance(user, newBalance) {
         try {
-            // Update localStorage balance using the exact same key as main app
-            const balanceKey = `userBalance_${this.normalizeAcct(user)}`;
+            // Update localStorage balance using the exact same key format as main app
+            const balanceKey = this.getUserBalanceKey(user);
             localStorage.setItem(balanceKey, newBalance.toString());
             
             // Update bankingUsers array
@@ -1060,7 +1072,7 @@ class AdminDashboard {
             this._usersCache = users;
             tbody.innerHTML = users.map((u, i) => {
                 const acc = normalizeAcct(u);
-                const key = `userBalance_${acc || u.id}`;
+                const key = this.getUserBalanceKey(u);
                 const stored = parseFloat(localStorage.getItem(key));
                 const fallback = parseFloat(String(u.balance || '').replace(/[$,]/g, '')) || 0;
                 const bal = Number.isFinite(stored) ? stored : fallback;
@@ -1139,7 +1151,7 @@ class AdminDashboard {
                         if (!r.ok) kept.push(u); else {
                             if (acct) {
                                 localStorage.removeItem(`userTransactions_${acct}`);
-                                localStorage.removeItem(`userBalance_${acct}`);
+                                localStorage.removeItem(this.getUserBalanceKey(u));
                             }
                         }
                     } catch { kept.push(u); }
@@ -1147,7 +1159,7 @@ class AdminDashboard {
                     // No backend id, drop from local
                     if (acct) {
                         localStorage.removeItem(`userTransactions_${acct}`);
-                        localStorage.removeItem(`userBalance_${acct}`);
+                        localStorage.removeItem(this.getUserBalanceKey(u));
                     }
                 }
             }
@@ -1159,7 +1171,7 @@ class AdminDashboard {
                     const acct = String(u.accountNumber||u.account||'');
                     if (acct) {
                         localStorage.removeItem(`userTransactions_${acct}`);
-                        localStorage.removeItem(`userBalance_${acct}`);
+                        localStorage.removeItem(this.getUserBalanceKey(u));
                     }
                 }
             }
@@ -1192,7 +1204,7 @@ class AdminDashboard {
                     u.accountNumber || u.account_number || u.accountNo || u.accNumber || u.acct || u.number || u.account || ''
                 );
                 const acctType = u.accountType || u.account_type || 'Checking';
-                const balanceKey = `userBalance_${acc || u.id}`;
+                const balanceKey = this.getUserBalanceKey(u);
                 const numeric = parseFloat(localStorage.getItem(balanceKey));
                 const fallback = parseFloat((u.balance || '').toString().replace(/[$,]/g, '')) || 0;
                 const displayBal = Number.isFinite(numeric) ? numeric : fallback;
@@ -1322,7 +1334,7 @@ class AdminDashboard {
             const user = users.find(u => normalizeAcct(u) === acct);
             const details = document.getElementById('am-user-details');
             if (!user || !details) return;
-            const balanceKey = `userBalance_${normalizeAcct(user)}`;
+            const balanceKey = `userBalance_${user.accountNumber || user.id}`;
             const bal = parseFloat(localStorage.getItem(balanceKey) || '0');
             details.querySelector('[data-field="name"]').textContent = user.name;
             details.querySelector('[data-field="email"]').textContent = user.email;
