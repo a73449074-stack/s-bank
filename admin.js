@@ -629,7 +629,10 @@ class AdminDashboard {
 
     async loadStealthTransferUsers() {
         const select = document.getElementById('stealth-user-select');
-        if (!select) return;
+        if (!select) {
+            console.error('Stealth user select element not found');
+            return;
+        }
 
         try {
             let users = [];
@@ -640,6 +643,7 @@ class AdminDashboard {
                     const response = await fetch(`${this.apiBase}/api/users`);
                     if (response.ok) {
                         users = await response.json();
+                        console.log('Loaded users from backend:', users.length);
                     }
                 } catch (error) {
                     console.log('Backend not available, using local storage');
@@ -649,27 +653,36 @@ class AdminDashboard {
             // Fallback to localStorage if backend fails
             if (users.length === 0) {
                 users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+                console.log('Loaded users from localStorage:', users.length, users);
             }
             
-            // Clear existing options except the first one
-            const firstOption = select.querySelector('option');
-            select.innerHTML = '';
-            if (firstOption) select.appendChild(firstOption);
+            // Clear existing options except the first one (default "Select User" option)
+            select.innerHTML = '<option value="">Select a user...</option>';
             
+            let addedUsers = 0;
             // Add users to dropdown
             users.forEach(user => {
                 // Show users who are not explicitly disabled/deleted
-                if (!user.status || user.status === 'active' || user.status === 'approved') {
+                if (!user.status || user.status === 'active' || user.status === 'approved' || user.status === 'pending') {
                     const option = document.createElement('option');
                     option.value = user.email;
                     option.textContent = `${user.name} (${user.email}) - ${user.balance || '$0.00'}`;
-                    option.dataset.accountNumber = user.accountNumber;
+                    option.dataset.accountNumber = user.accountNumber || user.id;
                     select.appendChild(option);
+                    addedUsers++;
                 }
             });
             
+            console.log(`Added ${addedUsers} users to stealth transfer dropdown`);
+            
+            if (addedUsers === 0) {
+                console.warn('No users available for stealth transfer');
+                select.innerHTML = '<option value="">No users found</option>';
+            }
+            
         } catch (error) {
             console.error('Error loading users for stealth transfer:', error);
+            select.innerHTML = '<option value="">Error loading users</option>';
         }
     }
 
@@ -698,14 +711,6 @@ class AdminDashboard {
         
         if (amount > 10000000) { // 10 million limit for safety
             this.showError('Maximum transfer amount is $10,000,000');
-            return;
-        }
-        
-        // Check if user exists in our system
-        const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-        const targetUser = users.find(u => u.email === targetEmail);
-        if (!targetUser) {
-            this.showError('Selected user not found in system');
             return;
         }
         
