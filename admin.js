@@ -658,7 +658,8 @@ class AdminDashboard {
             
             // Add users to dropdown
             users.forEach(user => {
-                if (user.status === 'active') { // Only show active users
+                // Show users who are not explicitly disabled/deleted
+                if (!user.status || user.status === 'active' || user.status === 'approved') {
                     const option = document.createElement('option');
                     option.value = user.email;
                     option.textContent = `${user.name} (${user.email}) - ${user.balance || '$0.00'}`;
@@ -690,13 +691,21 @@ class AdminDashboard {
             return;
         }
         
-        if (!amount || amount <= 0) {
-            this.showError('Please enter a valid amount');
+        if (!amount || amount <= 0 || isNaN(amount)) {
+            this.showError('Please enter a valid amount greater than 0');
             return;
         }
         
         if (amount > 10000000) { // 10 million limit for safety
             this.showError('Maximum transfer amount is $10,000,000');
+            return;
+        }
+        
+        // Check if user exists in our system
+        const users = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+        const targetUser = users.find(u => u.email === targetEmail);
+        if (!targetUser) {
+            this.showError('Selected user not found in system');
             return;
         }
         
@@ -750,17 +759,23 @@ class AdminDashboard {
             const userIndex = users.findIndex(u => u.email === targetEmail);
             
             if (userIndex === -1) {
+                console.error(`User not found with email: ${targetEmail}`);
                 throw new Error('User not found');
             }
             
             const user = users[userIndex];
+            console.log('Found user:', user);
             
-            // Get current balance
+            // Get current balance using the same key format as main app
             const userBalanceKey = `userBalance_${user.accountNumber || user.id}`;
+            console.log('Balance key:', userBalanceKey);
+            
             const currentBalance = parseFloat(localStorage.getItem(userBalanceKey) || '0');
+            console.log('Current balance:', currentBalance);
             
             // Add the amount (stealth transfer)
             const newBalance = currentBalance + amount;
+            console.log('New balance:', newBalance);
             
             // Update user balance in localStorage
             localStorage.setItem(userBalanceKey, newBalance.toString());
