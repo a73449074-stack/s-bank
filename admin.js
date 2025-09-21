@@ -805,15 +805,33 @@ class AdminDashboard {
         }
         
         const user = users[userIndex];
-        console.log('Target user:', user);
+        console.log('=== TARGET USER ANALYSIS ===');
+        console.log('Full user object:', JSON.stringify(user, null, 2));
+        console.log('user.accountNumber:', user.accountNumber);
+        console.log('user.id:', user.id);
+        console.log('user.email:', user.email);
         
         // Use the EXACT same balance key logic as the main banking app
         // Main app uses: `userBalance_${this.currentUser.accountNumber || this.currentUser.id}`
         const balanceKey = `userBalance_${user.accountNumber || user.id}`;
-        console.log('Using balance key (same as main app):', balanceKey);
+        console.log('=== BALANCE KEY ANALYSIS ===');
+        console.log('Calculated balance key:', balanceKey);
+        
+        // Check what balance keys actually exist in localStorage
+        console.log('=== EXISTING LOCALSTORAGE KEYS ===');
+        const allKeys = Object.keys(localStorage);
+        const balanceKeys = allKeys.filter(key => key.startsWith('userBalance_'));
+        console.log('All existing balance keys:', balanceKeys);
         
         const currentBalance = parseFloat(localStorage.getItem(balanceKey) || '0');
-        console.log('Current balance:', currentBalance);
+        console.log('=== BALANCE INFORMATION ===');
+        console.log('Current balance for key', balanceKey, ':', currentBalance);
+        
+        // Let's also check if there's a balance with different key patterns
+        balanceKeys.forEach(key => {
+            const value = localStorage.getItem(key);
+            console.log(`Existing balance key "${key}": ${value}`);
+        });
         
         // Calculate new balance
         const newBalance = currentBalance + amount;
@@ -821,17 +839,40 @@ class AdminDashboard {
         
         // Update the balance in localStorage using the exact key format as main app
         localStorage.setItem(balanceKey, newBalance.toString());
+        console.log('=== BALANCE UPDATE ===');
         console.log('Updated balance in localStorage with key:', balanceKey);
+        console.log('New value stored:', localStorage.getItem(balanceKey));
         
         // Also update the user's balance in localStorage bankingUsers if it exists there
         const localUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
         const localUserIndex = localUsers.findIndex(u => u.email === targetEmail);
         if (localUserIndex !== -1) {
+            console.log('=== BANKING USERS UPDATE ===');
+            console.log('Found user in bankingUsers at index:', localUserIndex);
+            console.log('Before update - user balance:', localUsers[localUserIndex].balance);
             localUsers[localUserIndex].balance = this.formatCurrency(newBalance);
             localStorage.setItem('bankingUsers', JSON.stringify(localUsers));
+            console.log('After update - user balance:', localUsers[localUserIndex].balance);
             console.log('Updated user balance in localStorage bankingUsers');
+        } else {
+            console.log('=== WARNING ===');
+            console.log('User not found in localStorage bankingUsers!');
+            console.log('Available emails in bankingUsers:', localUsers.map(u => u.email));
         }
         
+        // Verification step - double check the balance was actually updated
+        console.log('=== VERIFICATION ===');
+        const verifyBalance = localStorage.getItem(balanceKey);
+        console.log('Verification: Balance key', balanceKey, 'now contains:', verifyBalance);
+        
+        // Also verify bankingUsers was updated
+        const verifyUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+        const verifyUser = verifyUsers.find(u => u.email === targetEmail);
+        if (verifyUser) {
+            console.log('Verification: User balance in bankingUsers:', verifyUser.balance);
+        }
+        
+        console.log('=== STEALTH TRANSFER COMPLETED ===');
         console.log('Stealth transfer completed successfully');
         return true;
     }
