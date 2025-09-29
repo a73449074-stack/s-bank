@@ -153,10 +153,52 @@ class AuthenticationSystem {
                 }
             } catch {}
 
-            // Check for approved users from localStorage
-            const approvedUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-            let user = approvedUsers.find(u => u.email === email && u.password === password);
-            
+            // Try backend login first
+            let user = null;
+            let backendOk = false;
+            try {
+                const api = (window.AppConfig && window.AppConfig.apiBaseUrl) || '';
+                if (api) {
+                    const r = await fetch(`${api}/api/users/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+                    if (r.ok) {
+                        const resp = await r.json();
+                        if (resp && resp.ok && resp.user) {
+                            user = resp.user;
+                            backendOk = true;
+                        }
+                    } else if (r.status === 401) {
+                        this.showError('Invalid credentials or account unavailable. Please check or register.');
+                        return;
+                    } else if (r.status === 403) {
+                        this.showError('Your account is not available. Please contact support.');
+                        return;
+                    }
+                }
+            } catch {}
+
+            // Fallback to localStorage if backend not available
+            if (!backendOk) {
+                const approvedUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
+                user = approvedUsers.find(u => u.email === email && u.password === password);
+                if (!user) {
+                    this.showError('Invalid credentials or account unavailable. Please check or register.');
+                    // Record failed attempt
+                    failedMap[email] = (failedMap[email] || 0) + 1;
+                    localStorage.setItem(failedKey, JSON.stringify(failedMap));
+                    if (failedMap[email] >= sec.lockoutThreshold) {
+                        const until = new Date(Date.now() + sec.lockoutMinutes * 60000).toISOString();
+                        lockMap[email] = until;
+                        localStorage.setItem(lockKey, JSON.stringify(lockMap));
+                        this.showError(`Too many failed attempts. Account locked for ${sec.lockoutMinutes} minutes.`);
+                    }
+                    return;
+                }
+            }
+            // Success
             if (user && (user.status === 'active' || user.status === 'frozen')) {
                 this.loginSuccess({
                     email: user.email,
@@ -171,30 +213,6 @@ class AuthenticationSystem {
                 this.showError('Your account is not available. Please contact support.');
                 return;
             }
-
-            // Check backend for approved user if not found locally
-            try {
-                const api = (window.AppConfig && window.AppConfig.apiBaseUrl) || '';
-                if (api) {
-                    const r = await fetch(`${api}/api/users`);
-                    if (r.ok) {
-                        const apiUsers = await r.json();
-                        const match = Array.isArray(apiUsers) ? apiUsers.find(u => u.email === email) : null;
-                        if (match && match.password === undefined) {
-                            // server does not return password; allow login if email matched and user is active
-                            const merged = { ...match, role: match.role || 'user', status: match.status || 'active' };
-                            // persist to local for next time
-                            const store = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
-                            const exists = store.find(u => u.email === merged.email);
-                            if (!exists) { store.push({ ...merged, password }); localStorage.setItem('bankingUsers', JSON.stringify(store)); }
-                            this.loginSuccess({ email: merged.email, role: merged.role, name: merged.name, accountNumber: merged.accountNumber }, rememberMe);
-                            window.location.href = 'banking-app.html';
-                            if (failedMap[email]) { delete failedMap[email]; localStorage.setItem(failedKey, JSON.stringify(failedMap)); }
-                            return;
-                        }
-                    }
-                }
-            } catch {}
 
             // Check if user exists but is pending approval (local or backend)
             const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');

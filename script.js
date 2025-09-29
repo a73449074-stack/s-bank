@@ -310,42 +310,21 @@ class BankingApp {
             localStorage.setItem(userTransactionKey, JSON.stringify([]));
         }
         
-        // Initialize user-specific balance - AUTO SET TO $50+ MILLION
+        // Ensure user-specific balance is initialized to $0.00 if not set
         const userBalanceKey = this.getUserBalanceKey();
-        console.log('=== AUTO HIGH BALANCE INITIALIZATION ===');
-        console.log('Current User Object:', this.currentUser);
-        console.log('Generated Balance Key:', userBalanceKey);
-        
-        // Check if user already has a high balance (>= $10M)
-        const existingBalance = parseFloat(localStorage.getItem(userBalanceKey) || '0');
-        const hasHighBalance = existingBalance >= 10000000; // $10M threshold
-        
-        let finalBalance;
-        
-        if (hasHighBalance) {
-            // User already has high balance, keep it
-            finalBalance = existingBalance;
-            console.log('User already has high balance:', finalBalance, '($' + finalBalance.toLocaleString() + ')');
-        } else {
-            // Generate new random high balance between $50M - $100M
-            const baseAmount = 50000000; // $50 million base
-            const randomExtra = Math.floor(Math.random() * 50000000); // Up to $50M extra
-            finalBalance = baseAmount + randomExtra;
-            console.log('Auto-upgrading user balance to:', finalBalance, '($' + finalBalance.toLocaleString() + ')');
+        let existingBalance = parseFloat(localStorage.getItem(userBalanceKey));
+        if (isNaN(existingBalance)) {
+            existingBalance = 0.0;
+            localStorage.setItem(userBalanceKey, existingBalance.toString());
         }
-        
-        // Set the balance
-        localStorage.setItem(userBalanceKey, finalBalance.toString());
-        this.currentBalance = finalBalance;
-        
+        this.currentBalance = existingBalance;
         // Update bankingUsers array to match
         try {
             const bankingUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
             const userIndex = bankingUsers.findIndex(u => u.email === this.currentUser.email);
             if (userIndex !== -1) {
-                bankingUsers[userIndex].balance = this.formatCurrency(finalBalance);
+                bankingUsers[userIndex].balance = this.formatCurrency(existingBalance);
                 localStorage.setItem('bankingUsers', JSON.stringify(bankingUsers));
-                console.log('Updated bankingUsers balance to:', bankingUsers[userIndex].balance);
             }
         } catch (error) {
             console.error('Error updating bankingUsers:', error);

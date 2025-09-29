@@ -1,3 +1,14 @@
+// User login (email + password)
+app.post('/api/users/login', asyncH(async (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  const user = await db.collection('users').findOne({ email });
+  if (!user || user.password !== password) return res.status(401).json({ error: 'Invalid credentials' });
+  if (user.status !== 'active' && user.status !== 'frozen') return res.status(403).json({ error: 'Account not available' });
+  // Do not return password
+  const { password: _, ...userData } = user;
+  res.json({ ok: true, user: userData });
+}));
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
