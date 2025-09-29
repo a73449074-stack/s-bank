@@ -16,6 +16,8 @@ A comprehensive banking web application with full authentication system, user ma
 - **Password:** `demo123`
 - **Access:** Main banking interface
 
+> Balance Policy Update (Sep 2025): All newly registered users now start with a balance of `$0.00`. Any prior demo logic that auto‑generated large starting balances has been removed. Admins must explicitly set or adjust a user's balance after approval (via the Admin Dashboard balance tools). Pending and approved users both persist as zero until an admin action.
+
 **Alternative Demo Accounts:**
 - `carmen@example.com` / `carmen123`
 - `user@bank.com` / `user123`

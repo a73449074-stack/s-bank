@@ -100,6 +100,7 @@ app.get('/api/pending-users', asyncH(async (req, res) => {
 
 app.post('/api/pending-users', asyncH(async (req, res) => {
   const body = req.body || {};
+  // POLICY: ignore any provided balance; start at $0.00 for pending users
   const doc = {
     name: body.name,
     email: body.email,
@@ -109,7 +110,7 @@ app.post('/api/pending-users', asyncH(async (req, res) => {
     routingNumber: body.routingNumber || null,
     status: 'pending',
     requestDate: new Date(),
-    balance: body.balance || '$0.00',
+    balance: '$0.00',
     pin: body.pin || null,
     pinSetByUser: !!body.pinSetByUser,
     securityQuestions: Array.isArray(body.securityQuestions) ? body.securityQuestions : [],
@@ -125,10 +126,11 @@ app.post('/api/pending-users/approve/:id', asyncH(async (req, res) => {
   const pending = await db.collection('pending_users').findOne({ _id });
   if (!pending) return res.status(404).json({ error: 'Not found' });
   await db.collection('pending_users').deleteOne({ _id });
+  // POLICY: approved user starts at numeric 0 balance regardless of pending record value
   const user = {
     name: pending.name, email: pending.email, phone: pending.phone,
     accountNumber: pending.accountNumber, routingNumber: pending.routingNumber,
-    balance: Number((pending.balance||'0').toString().replace(/[$,]/g,'')) || 0,
+    balance: 0,
     status: 'active', role: 'user', pin: pending.pin, pinSetByUser: !!pending.pinSetByUser,
     joinDate: new Date(), lastLogin: null, createdAt: new Date(), updatedAt: new Date()
   };

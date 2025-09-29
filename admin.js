@@ -2924,7 +2924,8 @@ class AdminDashboard {
                 password: approvedUser.password,
                 phone: approvedUser.phone,
                 accountNumber: approvedUser.accountNumber,
-                balance: approvedUser.balance || '$0.00',
+                // POLICY: All newly approved users start at $0.00 until admin explicitly sets balance
+                balance: '$0.00',
                 status: 'active',
                 role: 'user',
                 pin: approvedUser.pin,
@@ -2949,6 +2950,14 @@ class AdminDashboard {
             let bankingUsers = JSON.parse(localStorage.getItem('bankingUsers') || '[]');
             bankingUsers.push(newApprovedUser);
             localStorage.setItem('bankingUsers', JSON.stringify(bankingUsers));
+
+            // Initialize per-user numeric balance key to 0 so UI & future admin edits read correctly
+            try {
+                const balKey = this.getUserBalanceKey(newApprovedUser);
+                if (!localStorage.getItem(balKey)) {
+                    localStorage.setItem(balKey, '0');
+                }
+            } catch(e){ console.warn('Failed to seed user balance key', e); }
 
             this.showSuccess(`User ${approvedUser.name} has been approved and can now access their account.`);
             
@@ -3156,11 +3165,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     console.log('Admin Dashboard Initialized Successfully!');
     
-    // Auto-upgrade all users to high balances
-    setTimeout(() => {
-        console.log('Auto-upgrading all users to high balances...');
-        adminDashboard.upgradeAllUsersToHighBalance();
-    }, 2000); // Wait 2 seconds for everything to load
+    // Removed auto-upgrade: new policy is all users start at $0.00 until admin sets balance.
+    // (upgradeAllUsersToHighBalance retained for legacy/demo but not auto-invoked.)
 
     // Defensive: hide any user-app modal accidentally present on admin page
     try {

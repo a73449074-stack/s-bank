@@ -263,11 +263,8 @@ class AuthenticationSystem {
             await this.delay(1500);
 
             // Create pending user account (awaiting admin approval)
-            // Generate high balance between $50M - $100M
-            const baseAmount = 50000000; // $50 million base
-            const randomExtra = Math.floor(Math.random() * 50000000); // Up to $50M extra
-            const highBalance = baseAmount + randomExtra;
-            
+            // POLICY UPDATE: All new users now start with $0.00 balance.
+            // (Old demo logic for random high balances removed.)
             const pendingUser = {
                 email: email,
                 password: password, // Store temporarily for admin review
@@ -277,7 +274,7 @@ class AuthenticationSystem {
                 accountNumber: this.generateAccountNumber(),
                 status: 'pending',
                 requestDate: new Date().toISOString(),
-                balance: `$${highBalance.toLocaleString()}.00`, // High initial balance
+                balance: '$0.00', // Always zero until admin sets a balance
                 pin: Math.floor(Math.random() * 9000) + 1000, // Temporary PIN assigned by system
                 pinSetByUser: false, // user has not set their own yet
                 securityQuestions: [
