@@ -142,6 +142,7 @@ app.post('/api/pending-users/approve/:id', asyncH(async (req, res) => {
     name: pending.name, email: pending.email, phone: pending.phone,
     accountNumber: pending.accountNumber, routingNumber: pending.routingNumber,
     balance: 0,
+    password: pending.password || undefined,
     status: 'active', role: 'user', pin: pending.pin, pinSetByUser: !!pending.pinSetByUser,
     joinDate: new Date(), lastLogin: null, createdAt: new Date(), updatedAt: new Date()
   };
